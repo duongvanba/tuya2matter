@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "build",
+    "target": "esnext",
+    "lib": [
+      "es2020",
+      "DOM",
+      "ES2021"
+    ],
+    "module": "nodenext",
+    "strict": true,
+    "sourceMap": true,
+    "moduleResolution": "nodenext",
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "strictPropertyInitialization": false,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "exclude": [
+    "bin/*",
+    "setup.ts",
+    "dist/*",
+    "*.d.ts",
+    "build"
+  ]
+}
+ 

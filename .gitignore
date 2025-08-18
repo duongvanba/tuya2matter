@@ -1,0 +1,10 @@
+node_modules
+bin
+yarn-error*
+build
+.env
+devices.json
+t.ts 
+config/*
+credential.json
+devices.json
