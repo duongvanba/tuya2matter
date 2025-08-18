@@ -179,6 +179,7 @@ export class TuyaConnection {
                             })
                             if (!socket.writable) return on_success?.(-1)
                             const error = await new Promise(s => {
+                        // @ts-ignore
                                 socket.write(buffer, s)
                             })
                             return on_success?.(error ? -1 : sequenceN)
@@ -254,6 +255,7 @@ export class TuyaConnection {
         })
 
         // Calculate session key
+        // @ts-ignore
         const sessionKey = Buffer.from(temp_local_key);
         for (let i = 0; i < temp_local_key.length; i++) {
             sessionKey[i] = temp_local_key[i] ^ temp_remote_key[i];

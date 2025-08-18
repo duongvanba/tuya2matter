@@ -115,10 +115,14 @@ export class TuyaHass {
         const randomNonce = Array.from({ length: 12 }, () => chars[crypto.randomInt(chars.length)]).join("");
         const nonce = Buffer.from(randomNonce, "utf8"); // 12 bytes
         const key = Buffer.from(secret, "utf8"); // 16 bytes
+        // @ts-ignore
         const cipher = crypto.createCipheriv("aes-128-gcm", key, nonce);
+        // @ts-ignore
         const ciphertext = Buffer.concat([cipher.update(rawData, "utf8"), cipher.final()]);
         const tag = cipher.getAuthTag(); // 16 bytes
+        // @ts-ignore
         const combined = Buffer.concat([ciphertext, tag]);
+        // @ts-ignore
         return Buffer.from(nonce).toString("base64") + Buffer.from(combined).toString("base64")
     }
 
@@ -139,8 +143,11 @@ export class TuyaHass {
         const key = Buffer.from(secret, "utf8");
         const tag = cipherAndTag.subarray(cipherAndTag.length - 16);
         const ct = cipherAndTag.subarray(0, cipherAndTag.length - 16);
+        // @ts-ignore
         const decipher = crypto.createDecipheriv("aes-128-gcm", key, nonce);
+        // @ts-ignore
         decipher.setAuthTag(tag);
+        // @ts-ignore
         const plain = Buffer.concat([decipher.update(ct), decipher.final()]);
         return plain.toString("utf8");
     }
@@ -170,8 +177,9 @@ export class TuyaHass {
 
         if (queryEncdata) signStr += queryEncdata;
         if (bodyEncdata) signStr += bodyEncdata;
-
+        // @ts-ignore
         const hmac = crypto.createHmac("sha256", Buffer.from(hashKey, "utf8"));
+        // @ts-ignore
         hmac.update(Buffer.from(signStr, "utf8"));
         return hmac.digest("hex");
     }
@@ -185,9 +193,12 @@ export class TuyaHass {
     }) {
         const rid = crypto.randomUUID();
         const md5 = crypto.createHash("md5");
+        // @ts-ignore
         md5.update(Buffer.from(rid + this.config.refresh_token, "utf8"));
         const hash_key = md5.digest("hex");
+        // @ts-ignore
         const hmac = crypto.createHmac("sha256", Buffer.from(rid, "utf8"));
+        // @ts-ignore
         hmac.update(Buffer.from(hash_key, "utf8"));
         const secret = hmac.digest("hex").slice(0, 16)
         // encrypt params/body to encdata if present

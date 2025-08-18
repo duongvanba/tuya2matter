@@ -341,6 +341,7 @@ export class MessageParser {
                 options.commandByte !== CommandType.DP_REFRESH) {
                 // Add 3.3 header
                 const buffer = Buffer.alloc(payload.length + 15);
+                // @ts-ignore
                 Buffer.from('3.3').copy(buffer, 0);
                 payload.copy(buffer, 15);
                 payload = buffer;
@@ -410,6 +411,7 @@ export class MessageParser {
             // Add 3.4 header
             // check this: mqc_very_pcmcd_mcd(int a1, unsigned int a2)
             const buffer = Buffer.alloc(payload.length + 15);
+            // @ts-ignore
             Buffer.from('3.4').copy(buffer, 0);
             payload.copy(buffer, 15);
             payload = buffer;
@@ -446,6 +448,7 @@ export class MessageParser {
         payload.copy(buffer, 16);
         // @ts-ignore
         const calculatedCrc = this.cipher.hmac(buffer.slice(0, payload.length + 16));// & 0xFFFFFFFF;
+        // @ts-ignore
         calculatedCrc.copy(buffer, payload.length + 16);
 
         buffer.writeUInt32BE(0x0000AA55, payload.length + 48);
