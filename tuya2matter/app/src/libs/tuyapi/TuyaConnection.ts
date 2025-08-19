@@ -15,7 +15,7 @@ export type ApiCredential = {
     region?: string
 }
 
-type DiscoverPayload = {
+export type DiscoverPayload = {
     ip: string,
     version: string
     gwId: string

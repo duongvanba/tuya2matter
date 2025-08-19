@@ -1,7 +1,6 @@
 import { createConnection } from "net";
 import { Observable, merge, map, fromEvent, firstValueFrom, EMPTY, filter, tap, debounceTime, from } from "rxjs";
-import ping from 'ping'
-import { ARP } from './ARP.js' 
+import ping from 'ping' 
 
 export class TuyaSocket {
 
@@ -21,16 +20,7 @@ export class TuyaSocket {
             return () => { running = false }
         })
 
-        const pingable = await firstValueFrom($ping)
-
-        // if (!pingable) {
-        //     const { reason, success } = await ARP.manual_configure(ip, mac, 3000)
-        //     if (!success) {
-        //         console.log(`[${new Date().toLocaleString()}]    Can not set ARP for ${name} due ${reason}`)
-        //         return { socket: null, $error: EMPTY, end: () => { } }
-        //     }
-        // }
-
+     
         const socket = createConnection({
             host: ip,
             port: port,

@@ -4,7 +4,6 @@ import { Endpoint, MaybePromise } from "@matter/main";
 import { OnOffLightDevice } from "@matter/main/devices/on-off-light";
 import { GenericSwitchDevice, OnOffLightRequirements, GenericSwitchRequirements, OnOffPlugInUnitRequirements, OnOffPlugInUnitDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer, OnOffServer, UserLabelServer } from "@matter/main/behaviors";
-import { Dps } from "../tuyapi/TuyaConnection.js";
 
 
 
@@ -58,7 +57,7 @@ export class Tuya2MatterSwitch {
             Object.entries(dps).forEach(([key, on]) => {
                 if (SWITCH_CODES.includes(key)) {
                     const target = endpoint.parts.get(key) as Endpoint<OnOffPlugInUnitDevice>
-                    target.set({ onOff: { onOff: !!on } })
+                    target?.set({ onOff: { onOff: !!on } })
                 }
             })
         })

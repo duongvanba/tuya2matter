@@ -1,0 +1,38 @@
+name: Tuya2Matter
+version: "1.0.0"
+slug: tuya2matter
+description: |
+  Bridge Tuya devices into Matter using Bun.js.
+
+  👉 Instructions:
+  1. Obtain your USER_CODE from the Smart Life / Tuya Smart app:
+     - On the tab bar, select **Me**.
+     - Tap the ⚙️ (gear) icon in the top-right corner.
+     - Choose **Account and Security**.
+     - At the bottom, your **User Code** will be shown.
+  2. Enter the USER_CODE string below in the "user_code" field.
+  3. Save the configuration and restart the add-on.
+  4. After the add-on starts, open the add-on **Log** tab.
+  
+arch:
+  - amd64
+  - aarch64
+  - armv7
+startup: application
+boot: auto
+init: false
+ingress: false
+
+# Quan trọng: bật host network để mDNS hoạt động
+host_network: true
+
+map:
+  - config:rw
+  - share:rw
+  - media:rw
+  - ssl:ro
+
+schema:
+  user_code: str?
+options:
+  user_code: ""

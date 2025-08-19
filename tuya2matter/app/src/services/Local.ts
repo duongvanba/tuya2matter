@@ -1,8 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { TuyaDevice } from "../libs/tuyapi/TuyaDevice.js";
-import { distinctUntilKeyChanged, exhaustMap, filter, first, firstValueFrom, from, groupBy, map, mergeAll, mergeMap, Observable, switchMap, tap } from "rxjs";
+import { distinctUntilKeyChanged, exhaustMap, filter, first, firstValueFrom, from, groupBy, map, mergeAll, mergeMap, Observable, startWith, switchMap, tap } from "rxjs";
 import { CloudSync } from "./CloudSync.js";
-import { TuyaConnection } from "../libs/tuyapi/TuyaConnection.js";
+import { DiscoverPayload, TuyaConnection } from "../libs/tuyapi/TuyaConnection.js";
 
 
 
@@ -20,7 +20,7 @@ export class LocalService extends Observable<TuyaDevice> {
             const subscription = this.cloud.pipe(
                 filter(Boolean),
                 first(),
-                switchMap(({ config }) => TuyaConnection.watch().pipe(
+                switchMap(({ config }) => TuyaConnection.watch().pipe( 
                     groupBy($ => $.gwId),
                     mergeMap($ => $.pipe(
                         mergeMap(async $ => {
