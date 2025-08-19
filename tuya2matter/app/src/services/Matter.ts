@@ -59,7 +59,7 @@ export class MatterService {
         });
         await server.add(aggregator)
         this.#aggregator = aggregator
-        await server.start() 
+        await server.start()  
 
     }
 }
