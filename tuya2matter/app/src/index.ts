@@ -7,7 +7,7 @@ import { SyncService } from "./services/Sync.js";
 import { MatterService } from "./services/Matter.js";
 import { LocalService } from "./services/Local.js";
 
-
+console.log(`VERSION 1.0.5`)
 
 @Module({
     providers: [
