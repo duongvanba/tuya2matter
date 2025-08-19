@@ -1,0 +1,4 @@
+# https://developers.home-assistant.io/docs/add-ons/repository#repository-configuration
+name: Tuya2Matter Add-ons
+url: 'hhttps://github.com/duongvanba/tuya2matter'
+maintainer: Mike duongvanba.agency@gmail.com
