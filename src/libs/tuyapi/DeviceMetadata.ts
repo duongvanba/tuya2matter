@@ -13,12 +13,12 @@ export type DeviceMetadata = {
     mapping: {
         [key: string]: {
             code: string,
-            dp_id: string | number 
+            dp_id: string | number
         }
     },
     model: string,
     online: boolean
-    supportLocal: boolean
     home_id: string
     gateway_id?: string
+    is_gateway: boolean
 }

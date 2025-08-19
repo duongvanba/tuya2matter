@@ -7,7 +7,7 @@ import { sleep } from "../../helpers/sleep.js";
 export class TuyaSocket {
 
 
-    static async init(name: string, ip: string, port: number, mac: string) {
+    static async init(name: string, ip: string, port: number ) {
 
         const $ping = new Observable<boolean>(o => {
             let running = true
@@ -24,13 +24,13 @@ export class TuyaSocket {
 
         const pingable = await firstValueFrom($ping)
 
-        if (!pingable) {
-            const { reason, success } = await ARP.manual_configure(ip, mac, 3000)
-            if (!success) {
-                console.log(`[${new Date().toLocaleString()}]    Can not set ARP for ${name} due ${reason}`)
-                return { socket: null, $error: EMPTY, end: () => { } }
-            }
-        }
+        // if (!pingable) {
+        //     const { reason, success } = await ARP.manual_configure(ip, mac, 3000)
+        //     if (!success) {
+        //         console.log(`[${new Date().toLocaleString()}]    Can not set ARP for ${name} due ${reason}`)
+        //         return { socket: null, $error: EMPTY, end: () => { } }
+        //     }
+        // }
 
         const socket = createConnection({
             host: ip,

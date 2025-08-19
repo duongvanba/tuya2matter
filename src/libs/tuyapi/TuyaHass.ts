@@ -2,7 +2,7 @@
 import got from 'got';
 import * as crypto from "crypto";
 import { sleep } from '../../helpers/sleep.js';
-import { firstValueFrom, from, map, mergeAll, mergeMap, reduce, scan, toArray } from 'rxjs';
+import { firstValueFrom, from, interval, mergeMap, reduce, Subject, Subscription, toArray } from 'rxjs';
 import { DeviceMetadata } from './DeviceMetadata.js';
 
 
@@ -33,21 +33,18 @@ export type TuyaCredential = {
 }
 
 export type TuyaDeviceHomeMap = {
-    [x: string]: {
-        home: TuyaHome
-        hubs: {
-            [id: string]: DeviceMetadata
-        };
-        wifi: {
-            [id: string]: DeviceMetadata
-        };
-        children: {
-            [id: string]: DeviceMetadata
-        }
-    };
+    homes: {
+        [home_id: string]: TuyaHome
+    },
+    devices: {
+        [device_id: string]: DeviceMetadata
+    }
 }
 
 export class TuyaHass {
+
+    #autoRefresh: Subscription
+    public readonly credential = new Subject<TuyaCredential>
 
     static async getCredential(usercode: string) {
         const client = got.extend({
@@ -104,9 +101,11 @@ export class TuyaHass {
         }
     }
 
-
     constructor(public readonly config: TuyaCredential) {
-
+        this.#autoRefresh = from(this.refresh()).pipe(
+            mergeMap(() => interval(7100 * 1000)),
+            mergeMap(() => this.refresh())
+        ).subscribe()
     }
 
     #aesGcmEncrypt(obj: any, secret: string): string {
@@ -126,13 +125,6 @@ export class TuyaHass {
         return Buffer.from(nonce).toString("base64") + Buffer.from(combined).toString("base64")
     }
 
-    /**
-     * AES-GCM decrypt:
-     * - input là một chuỗi base64 ghép: base64(nonce) + base64(ciphertext||tag)
-     * - Python phía nhận trả về: base64(nonce||ciphertext||tag), nhưng do concat 2 base64
-     *   vẫn decode block-wise được thành nonce||cipher.
-     * - Ở đây ta decode toàn chuỗi một lần -> ra nonce(12) + cipherAndTag
-     */
     #aexGcmDecrypt(cipherDataB64Concat: string, secret: string): string {
         const all = Buffer.from(cipherDataB64Concat, 'base64')
         const nonce = all.subarray(0, 12);
@@ -152,13 +144,6 @@ export class TuyaHass {
         return plain.toString("utf8");
     }
 
-    /**
-     * Ký restful:
-     * - headerSign: "X-appKey=a||X-requestId=b||X-sid=c||X-time=d||X-token=e"
-     *   (chỉ thêm nếu có giá trị), chuỗi cuối bỏ "||"
-     * - append query_encdata và body_encdata nếu có
-     * - HMAC-SHA256(key=hash_key, msg=sign_str).hex()
-     */
     #restfulSign(
         hashKey: string,
         queryEncdata: string,
@@ -233,11 +218,6 @@ export class TuyaHass {
     // ====== Token refresh ======s
     async refresh() {
         if (this.#refreshing) return true
-
-        const now = Date.now();
-        const expiredTime = this.config.expire_time;
-        if (expiredTime - 60_000 > now) return true; // còn >1 phút thì thôi
-
         this.#refreshing = true;
         try {
             const res = await this.request<{
@@ -247,18 +227,15 @@ export class TuyaHass {
             if (res.data) {
                 this.config.access_token = res.data.accessToken
                 this.config.refresh_token = res.data.refreshToken
-                return true
             }
-
+            this.credential.next({ ...this.config })
         } catch (e: any) {
             // giữ nguyên phong cách log ngắn gọn
             console.error("network error on refresh =", e?.message ?? e);
-        } finally {
-            this.#refreshing = false;
         }
-
-        return false
+        this.#refreshing = false;
     }
+
 
     async listHomes() {
         const path = `/v1.0/m/life/users/homes`
@@ -268,8 +245,8 @@ export class TuyaHass {
 
     async listDevices(homeId: string | number) {
         const path = `/v1.0/m/life/ha/home/devices`
-        type R = Array<Omit<DeviceMetadata, 'mapping' | 'home_id' | 'gateway_id' | 'supportLocal'>>
-        const r = await this.request<R>({
+        type BasicDeviceMetadata = Omit<DeviceMetadata, 'mapping' | 'home_id' | 'gateway_id' | 'supportLocal'>
+        const r = await this.request<BasicDeviceMetadata[]>({
             path,
             params: { homeId }
         })
@@ -289,94 +266,84 @@ export class TuyaHass {
     }
 
 
-    fetchAll() {
-        return firstValueFrom(from(this.listHomes()).pipe(
-            mergeAll(),
+    async fetchAll() {
+        const homes = await this.listHomes()
+        if (homes.length == 0) return { devices: {}, homes: {} } as TuyaDeviceHomeMap
+
+
+        return await firstValueFrom(from(homes).pipe(
             mergeMap(async home => {
-                const devices = await this.listDevices(home.ownerId)
-                console.log({ home: home.name, devices: devices.length })
+                const all_devices = await this.listDevices(home.ownerId)
                 const a = Date.now()
-                const config = await firstValueFrom(from(devices).pipe(
+                console.log({ home: home.name, devices: all_devices.length })
+                const list = await firstValueFrom(from(all_devices).pipe(
                     mergeMap(async device => {
-                        const status = await this.getDeviceStatus(device.id)
-                        const mapping = status.dpStatusRelationDTOS.reduce((p, c) => {
+                        const r = await this.getDeviceStatus(device.id)
+                        const mapping = r.dpStatusRelationDTOS.reduce((p, c) => {
+                            const m = {
+                                code: c.dpCode,
+                                dp_id: Number(c.dpId)
+                            }
                             return {
                                 ...p,
-                                [Number(c.dpId)]: c.dpCode,
-                                [c.dpCode]: Number(c.dpId)
+                                [Number(c.dpId)]: m,
+                                [c.dpCode]: m
                             }
                         }, {})
-                        const merged: DeviceMetadata & { home: TuyaHome } = {
+                        const merged: DeviceMetadata = {
                             ...device,
                             mapping,
-                            home,
-                            home_id: home.ownerId,
-                            supportLocal: status.supportLocal
+                            home_id: home.ownerId
                         }
                         return merged
-                    }, 1),
+                    }, 3),
                     toArray()
-                ))
-                console.log(`Loaded ${config.length} devices in ${Date.now() - a} ms`)
-                return config
-            }, 1),
-            mergeAll(),
-            reduce((p, { home, ...c }) => {
-                const sub = c.sub
-                const gateway = c.product_name.toLowerCase().includes('gateway')
-                return {
-                    ...p,
-                    [c.home_id]: {
-                        home,
-                        children: {
-                            ...p[c.home_id]?.children || {},
-                            ...sub ? {
-                                [c.id]: c
-                            } : {}
-                        },
-                        hubs: {
-                            ...p[c.home_id]?.hubs || {},
-                            ...gateway ? {
-                                [c.id]: c
-                            } : {}
-                        },
-                        wifi: {
-                            ...p[c.home_id]?.wifi || {},
-                            ...c.sub ? {} : {
-                                [c.id]: c
-                            }
-                        }
-                    }
-                }
-            }, {} as TuyaDeviceHomeMap),
-            map(devices => Object.entries(devices)),
-            mergeAll(),
-            map(([home_id, { children: _, home, hubs, wifi }]) => {
-                const hub_ids = Object.keys(hubs)
-                const gateway_id = hub_ids.length == 1 ? hub_ids[0]! : null
-                const children = Object.entries(_).reduce((p, [id, device]) => {
+                ), { defaultValue: [] as DeviceMetadata[] })
+                console.log({
+                    home: home.name,
+                    devices: all_devices.length,
+                    ms: Date.now() - a
+                })
+                const hubs = list.filter(
+                    c => !c.sub && c.product_name.toLowerCase().includes('gateway')
+                ).reduce((p, c) => ({ ...p, [c.id]: c }), {} as { [id: string]: DeviceMetadata })
+
+                const devices = list.map(d => {
+                    const hub_ids = Object.keys(hubs)
+                    const gateway_id = d.sub && hub_ids.length == 1 ? hub_ids[0]! : null
+                    const is_gateway = !!hubs[d.id]
                     return {
-                        ...p,
-                        [id]: {
-                            ...device,
-                            gateway_id
-                        } as DeviceMetadata
-                    }
-                }, {})
+                        ...d,
+                        gateway_id,
+                        is_gateway
+                    } as DeviceMetadata
+                }).reduce((p, c) => ({
+                    ...p,
+                    [c.id]: c
+                }), {})
                 return {
-                    [home_id]: {
-                        home,
-                        hubs,
-                        wifi,
-                        children
+                    home,
+                    devices,
+                    hubs
+                }
+            }, 1),
+            reduce((p, c) => {
+                return {
+                    homes: {
+                        ...p.homes,
+                        [c.home.id]: c.home
+                    },
+                    devices: {
+                        ...p.devices,
+                        ...c.devices
                     }
                 }
-            }),
-            reduce(
-                (p, c) => ({ ...p, ...c }) as TuyaDeviceHomeMap,
-                {} as TuyaDeviceHomeMap
-            )
+            }, {} as TuyaDeviceHomeMap)
         ))
+    }
+
+    [Symbol.dispose]() {
+        this.#autoRefresh?.unsubscribe()
     }
 
 

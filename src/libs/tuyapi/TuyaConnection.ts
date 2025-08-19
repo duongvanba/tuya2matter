@@ -6,7 +6,7 @@ import { TuyaSocket } from './TuyaSocket.js'
 import { sleep } from '../../helpers/sleep.js'
 import { DeviceMetadata } from './DeviceMetadata.js'
 
-const cap_first_char = (str:string) => `${str[0].toUpperCase}${str.slice(1)}`
+const cap_first_char = (str: string) => `${str[0].toUpperCase}${str.slice(1)}`
 
 
 export type ApiCredential = {
@@ -24,9 +24,9 @@ type DiscoverPayload = {
 
 export type DeviceID = string
 
- 
 
-export type ConnectionStatusCode = 'created' | 'connecting' | 'online' | 'offline' | 'connected'
+
+export type ConnectionStatusCode = 'created' | 'connecting' | 'online' | 'offline'
 export type ConnectionStatus = BehaviorSubject<ConnectionStatusCode>
 
 export type Dps = {
@@ -116,7 +116,7 @@ export class TuyaConnection {
     #DEBUG = false
     constructor(
         public readonly config: Omit<DeviceMetadata, 'ip' | 'version'>,
-        private cids: string[]
+        private cids: DeviceMetadata[] | false | null
     ) {
         this.#DEBUG = !!(
             process.env.TUYA2MQTT_DEBUG == 'all'
@@ -129,94 +129,92 @@ export class TuyaConnection {
             filter(Boolean),
             exhaustMap(async ({ ip, version }) => {
 
+                if (this.$status.getValue() == 'online' || this.$status.getValue() == 'connecting') return
 
-                for (let i = 1; i <= 5; i++) {
-                    this.$status.next('connecting')
-                    await sleep(1000)
-                    this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    => ${i == 1 ? 'Connecting' : `Reconnect (${i})`} to ${this.config.name} - ip ${ip} - mac ${this.config.mac}`)
 
-                    const { $error, end, socket } = await TuyaSocket.init(this.config.name, ip, this.config.port || 6668, this.config.mac)
-                    if (!socket) continue
+                this.$status.next('connecting')
+                await sleep(1000)
+                this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    => Connecting to ${this.config.name} - ip ${ip} `)
 
-                    const parser = new MessageParser({
-                        key: this.config.local_key,
-                        version
+                const { $error, end, socket } = await TuyaSocket.init(this.config.name, ip, this.config.port || 6668)
+                if (!socket) return
+
+                const parser = new MessageParser({
+                    key: this.config.local_key,
+                    version
+                })
+
+                // Map response 
+                let $seq = 100
+                fromEvent(socket, 'data').pipe(
+                    takeUntil($error),
+                    tap(() => this.$status.getValue() != 'online' && this.$status.next('online')),
+                    map(data => parser.parse(data) as Array<CmdResponse>),
+                    mergeAll(),
+                    tap(data => {
+                        $seq = Math.max(data.sequenceN, $seq)
+                        const p = data.payload as { dps: Dps, cid: string }
+                        if (p.dps || p.cid) {
+                            const id = p.cid || this.config.id
+                            this.#devices.get(id)?.forEach(s => s.next(p.dps || {}))
+                        }
+
+                        const pp = data.payload as SubDeviceReport
+                        if (pp.reqType == 'subdev_online_stat_report') {
+                            pp.data.online?.forEach(id => this.$sub_dev_reports.next({ id, online: true }))
+                            pp.data.offline?.forEach(id => this.$sub_dev_reports.next({ id, online: false }))
+                        }
+
+                        this.#$response.next(data)
                     })
+                ).subscribe()
 
-                    // Map response 
-                    let $seq = 100
-                    fromEvent(socket, 'data').pipe(
-                        takeUntil($error),
-                        tap(() => this.$status.getValue() != 'online' && this.$status.next('online')),
-                        map(data => parser.parse(data) as Array<CmdResponse>),
-                        mergeAll(),
-                        tap(data => {
-                            $seq = Math.max(data.sequenceN, $seq)
-                            const p = data.payload as { dps: Dps, cid: string }
-                            if (p.dps || p.cid) {
-                                const id = p.cid || this.config.id
-                                this.#devices.get(id)?.forEach(s => s.next(p.dps || {}))
-                            }
-
-                            const pp = data.payload as SubDeviceReport
-                            if (pp.reqType == 'subdev_online_stat_report') {
-                                pp.data.online?.forEach(id => this.$sub_dev_reports.next({ id, online: true }))
-                                pp.data.offline?.forEach(id => this.$sub_dev_reports.next({ id, online: false }))
-                            }
-
-                            this.#$response.next(data)
+                // Map request 
+                this.#$request.pipe(
+                    takeUntil($error),
+                    mergeMap(async ({ payload, on_success }) => {
+                        const sequenceN = ++$seq
+                        const buffer = parser.encode({
+                            ...payload,
+                            sequenceN
                         })
-                    ).subscribe()
-
-                    // Map request 
-                    this.#$request.pipe(
-                        takeUntil($error),
-                        mergeMap(async ({ payload, on_success }) => {
-                            const sequenceN = ++$seq
-                            const buffer = parser.encode({
-                                ...payload,
-                                sequenceN
-                            })
-                            if (!socket.writable) return on_success?.(-1)
-                            const error = await new Promise(s => {
-                        // @ts-ignore
-                                socket.write(buffer, s)
-                            })
-                            return on_success?.(error ? -1 : sequenceN)
-                        }, 1)
-                    ).subscribe()
+                        if (!socket.writable) return on_success?.(-1)
+                        const error = await new Promise(s => {
+                            // @ts-ignore
+                            socket.write(buffer, s)
+                        })
+                        return on_success?.(error ? -1 : sequenceN)
+                    }, 1)
+                ).subscribe()
 
 
-                    version == '3.4' && this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> ${cap_first_char(this.config.name)}: Encrypting 3.4 protocol`)
-                    const decrypted = version == '3.4' ? await this.#setup_3_4_protocol(parser) : true
-                    if (!decrypted) {
-                        console.error(`[${new Date().toLocaleString()}] [${ip}] <${this.config.id}> Can not setup 3.4 protocol`)
-                        end()
-                        continue
-                    }
-
-                    this.$status.getValue() == 'connecting' && this.$status.next('connected')
-
-                    // Syncing
-                    this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> ${cap_first_char(this.config.name)} Syncing [protocol ${version}]`)
-
-                    await this.refresh()
-                    const a = Date.now()
-                    await this.sync_all()
-
-                    this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> ${cap_first_char(this.config.name)} Synced [protocol ${version}] in ${Date.now() - a} m`)
-                    this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> ${cap_first_char(this.config.name)} ONLINE [protocol ${version}]`)
-                    i = 1
-                    interval(5000).pipe(
-                        takeUntil($error),
-                        map(() => cids.length > 0 ? this.refresh() : this.sync())
-                    ).subscribe()
-
-                    const offline_reason = await $error
-                    this.#DEBUG && console.log(`[${new Date().toLocaleString()}] [${ip}] <${this.config.id}> ${cap_first_char(this.config.name)} OFFLINE [reason ${offline_reason}]`)
+                version == '3.4' && this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}: Encrypting 3.4 protocol`)
+                const decrypted = version == '3.4' ? await this.#setup_3_4_protocol(parser) : true
+                if (!decrypted) {
+                    console.error(`[${new Date().toLocaleString()}] [${ip}] <${this.config.id}> Can not setup 3.4 protocol`)
+                    end()
+                    return
                 }
 
-                this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    => Can not connect to ${this.config.name} - ip ${ip} - mac ${this.config.mac}`)
+                // this.$status.getValue() == 'connecting' && this.$status.next('online')
+
+                // Syncing
+                this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> ${this.config.name} Syncing [protocol ${version}]`)
+
+                await this.refresh()
+                const a = Date.now()
+                await this.sync_all()
+
+                this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}: Synced [protocol ${version}] in ${Date.now() - a} m`)
+                this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}: ONLINE [protocol ${version}]`)
+                interval(5000).pipe(
+                    takeUntil($error),
+                    map(() => cids ? this.refresh() : this.sync())
+                ).subscribe()
+
+                const offline_reason = await $error
+                this.#DEBUG && console.log(`[${new Date().toLocaleString()}] [${ip}] <${this.config.id}>  ${this.config.name}: OFFLINE [reason ${offline_reason}]`)
+                this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    => Can not connect to ${this.config.name} - ip ${ip} `)
                 this.$status.next('offline')
             })
 
@@ -224,8 +222,8 @@ export class TuyaConnection {
     }
 
 
-    async connect(info: { ip, version }) {
-        this.#$broadcast_metadata.next(info)
+    connect(info: { ip, version }) {
+        this.#$broadcast_metadata.next({ ...info, version: `${info.version}` })
     }
 
     async #setup_3_4_protocol(parser: MessageParser) {
@@ -391,18 +389,18 @@ export class TuyaConnection {
         }, true, 1000) as { dps?: any }
         if (dps as string == 'json obj data unvalid') {
             const id = sub_device_id || this.config.id
-            this.#devices.get(id)?.forEach(s => s.next({})) 
+            this.#devices.get(id)?.forEach(s => s.next({}))
         }
         return dps
     }
 
     async sync_all() {
-        if (this.cids.length == 0) {
+        if (!this.cids) {
             await this.sync()
             return
         }
         for (const cid of this.cids) {
-            await this.sync(cid)
+            await this.sync(cid.id)
         }
     }
 

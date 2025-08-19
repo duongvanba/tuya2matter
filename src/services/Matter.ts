@@ -1,9 +1,11 @@
 import { Injectable } from "@nestjs/common";
-import { Endpoint, ServerNode, VendorId, } from "@matter/main";
+import { Endpoint, ServerNode, VendorId, Environment, StorageService, Logger } from "@matter/main";
 import { AggregatorEndpoint } from "@matter/main/endpoints/aggregator";
 
+const storageService = Environment.default.get(StorageService)
+storageService.location = './.matter'
 
-
+Logger.level = 'warn'
 
 @Injectable()
 export class MatterService {
@@ -17,12 +19,12 @@ export class MatterService {
     }
 
 
-    private async onModuleInit() {
+    async onModuleInit() {
         const id = '1755148286885'
         const productId = 32768
-        const productName = 'duongvanba@matter'
-        const deviceName = 'Matter test device'
-        const vendorName = 'matter-node.js'
+        const productName = 'tuya-matter-bridge'
+        const deviceName = 'Tuya Matter Bridge'
+        const vendorName = 'tuya-matter-bridge'
         const passcode = 22091997
         const discriminator = 3840
         const vendorId = 65521
@@ -49,14 +51,15 @@ export class MatterService {
                 productId,
                 serialNumber,
                 uniqueId: id,
-            }
+            },
+
         })
         const aggregator = new Endpoint(AggregatorEndpoint, {
             id: "aggregator"
         });
         await server.add(aggregator)
         this.#aggregator = aggregator
-        await server.start()
+        await server.start() 
 
     }
 }

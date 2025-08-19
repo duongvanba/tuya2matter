@@ -9,3 +9,5 @@ config/*
 credential.json
 devices.json
 .vscode
+.tuya
+.matter

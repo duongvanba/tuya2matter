@@ -1,5 +1,5 @@
 import { BehaviorSubject, Subject, filter, groupBy, map, mergeMap, skip, tap } from "rxjs";
-import { ConnectionStatusCode, Dps, TuyaConnection  } from "./TuyaConnection.js";
+import { ConnectionStatusCode, Dps, TuyaConnection } from "./TuyaConnection.js";
 import { DeviceMetadata } from "./DeviceMetadata.js";
 
 type LastCommandState = {
@@ -17,7 +17,7 @@ export class TuyaDevice {
     #convert_to_string_key_dps(dps: Dps) {
         return Object.entries(dps).reduce(
             (p, [key, value]) => {
-                const mapped_key = isNaN(Number(key)) ? key : this.config.mapping[key].code
+                const mapped_key = this.config.mapping[`${key}`]?.code
                 if (!mapped_key) return p
                 return { ...p, [mapped_key]: value }
             },
@@ -28,7 +28,7 @@ export class TuyaDevice {
     #convert_to_number_key_dps(dps: Dps) {
         return Object.entries(dps).reduce(
             (p, [key, value]) => {
-                const mapped_key = isNaN(Number(key)) ? this.config.mapping[key].dp_id : key
+                const mapped_key = this.config.mapping[`${key}`]?.dp_id
                 if (!mapped_key) return p
                 return { ...p, [mapped_key]: value }
             },
@@ -99,12 +99,16 @@ export class TuyaDevice {
         return this.config.id
     }
 
-     get id() {
+    get id() {
         return this.config.id
     }
 
-    get category(){
+    get category() {
         return this.config.category
+    }
+
+    get name() {
+        return this.config.name
     }
 
 

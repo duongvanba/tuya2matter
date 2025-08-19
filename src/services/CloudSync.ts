@@ -1,48 +1,53 @@
 import { Injectable } from "@nestjs/common";
 import { TuyaCredential, TuyaDeviceHomeMap, TuyaHass } from "../libs/tuyapi/TuyaHass.js";
-import { existsSync, readFileSync } from "fs";
-import { generate } from 'qrcode-terminal'
+import { existsSync } from "fs";
+import QrCode from 'qrcode-terminal'
 import { sleep } from "../helpers/sleep.js";
+import { Behavior } from "@matter/main";
+import { BehaviorSubject } from "rxjs";
 
 
 @Injectable()
-export class CloudSync {
+export class CloudSync extends BehaviorSubject<false | { api: TuyaHass, config: TuyaDeviceHomeMap }> {
 
-    #hass: TuyaHass
-    #config: TuyaDeviceHomeMap
-
-    get api() {
-        return this.#hass
-    }
-
-    get config() {
-        return this.#config
-    }
+    readonly #DIR = './.tuya'
+    readonly #CREDENTIAL_PATH = `${this.#DIR}/credential.json`
+    readonly #DEVICES_PATH = `${this.#DIR}/devices.json` 
+ 
 
 
-    private async onModuleInit() {
-        const path = './credential.json'
-        if (existsSync(path)) {
-            const config = JSON.parse(readFileSync(path, 'utf-8')) as TuyaCredential
-            this.#hass = new TuyaHass(config)
-            return
+    async onModuleInit() {
+        const api = await this.#getClient()
+        api.credential.subscribe(config => {
+            Bun.file(this.#CREDENTIAL_PATH).write(JSON.stringify(config, null, 2))
+        })
+        if (existsSync(this.#DEVICES_PATH)) {
+            const config = await Bun.file(this.#DEVICES_PATH).json() as TuyaDeviceHomeMap
+            this.next({ api, config })
+        } else {
+            const config = await api.fetchAll()
+            await Bun.file(this.#DEVICES_PATH).write(JSON.stringify(config, null, 2))
+            this.next({ api, config })
         }
-        const userCode = process.env.USER_CODE
-        if (!userCode) {
-            console.error(`Missing USER_CODE env !!!`)
-            await sleep(5000)
-            process.exit(1)
+    }
+
+    async #getClient() {
+        if (existsSync(this.#CREDENTIAL_PATH)) {
+            const config = await Bun.file(this.#CREDENTIAL_PATH).json() as TuyaCredential
+            return new TuyaHass(config)
         }
         const { next, qrcode } = await TuyaHass.login(process.env.USER_CODE!)
         console.log(`Scan qr code bellow: `)
-        generate(qrcode, { small: true })
+        QrCode.generate(qrcode, { small: true })
         const hass = await next()
         if (!hass) {
-            console.error(`Can not login !!!`)
+            console.error({ error: 'CAN_NOT_LOGIN' })
             await sleep(5000)
             process.exit(1)
         }
-        this.#hass = hass
-        this.#config = await hass.fetchAll()
+        return hass
+
     }
+
+
 }

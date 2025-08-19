@@ -1,7 +1,9 @@
 import { AggregatorEndpoint } from "@matter/main/endpoints/aggregator";
 import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint } from "@matter/main";
-import { Tuya2MatterSwitch } from "./T2mSwitch.js";
+import { Tuya2MatterSwitch } from "./Tuya2MatterSwitch.js";
+import { Tuya2MatterCover } from "./Tuya2MatterCover.js";
+
 
 
 export class Tuya2Matter {
@@ -10,13 +12,14 @@ export class Tuya2Matter {
         public readonly tuya: TuyaDevice
     ) { }
 
-    #getMapper(){
-        if(this.tuya.category == 'pw') return new Tuya2MatterSwitch(this.aggregator, this.tuya)
+    #getMapper() {
+        if (['kg', 'tdq'].includes(this.tuya.category)) return new Tuya2MatterSwitch(this.aggregator, this.tuya)
+        if (this.tuya.category == 'cl') return new Tuya2MatterCover(this.aggregator, this.tuya)
     }
 
     async init() {
-       const device = this.#getMapper()
-       if(device) await device.init()
+        const device = this.#getMapper()
+        if (device) await device.init()
     }
 
 
