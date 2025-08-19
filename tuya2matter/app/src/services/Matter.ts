@@ -5,7 +5,7 @@ import { AggregatorEndpoint } from "@matter/main/endpoints/aggregator";
 const storageService = Environment.default.get(StorageService)
 storageService.location = './.matter'
 
-Logger.level = 'warn'
+// Logger.level = 'warn'
 
 @Injectable()
 export class MatterService {
