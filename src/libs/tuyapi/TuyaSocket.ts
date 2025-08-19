@@ -1,8 +1,7 @@
 import { createConnection } from "net";
 import { Observable, merge, map, fromEvent, firstValueFrom, EMPTY, filter, tap, debounceTime, from } from "rxjs";
 import ping from 'ping'
-import { ARP } from './ARP.js'
-import { sleep } from "../../helpers/sleep.js";
+import { ARP } from './ARP.js' 
 
 export class TuyaSocket {
 
@@ -15,7 +14,7 @@ export class TuyaSocket {
                 while (running) {
                     const { alive } = await ping.promise.probe(ip, { timeout: 5, deadline: 5 })
                     o.next(alive)
-                    await sleep(1000)
+                    await Bun.sleep(1000)
                 }
             })
 

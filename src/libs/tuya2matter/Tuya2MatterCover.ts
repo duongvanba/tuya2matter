@@ -1,10 +1,10 @@
 import { AggregatorEndpoint, } from "@matter/main/endpoints/aggregator";
 import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint } from "@matter/main";
-import { GenericSwitchDevice, WindowCoveringDevice, WindowCoveringControllerDevice } from "@matter/main/devices";
-import { BridgedDeviceBasicInformationServer, WindowCoveringInterface } from "@matter/main/behaviors";
+import { WindowCoveringDevice } from "@matter/main/devices";
+import { BridgedDeviceBasicInformationServer } from "@matter/main/behaviors";
 import { MovementDirection, MovementType, WindowCoveringServer } from "@matter/main/behaviors";
-import { filter, first, map, mergeMap } from "rxjs";
+import { mergeMap } from "rxjs";
 
 
 const LiftingWindowCoveringServer = WindowCoveringServer.with("Lift", "PositionAwareLift", "AbsolutePosition");
@@ -33,7 +33,7 @@ export class Tuya2MatterCover {
                 ) {
                     targetPercent100ths != undefined && tuya.set_dps({
                         percent_control: targetPercent100ths / 100
-                    }) 
+                    })
                 }
             }).with(BridgedDeviceBasicInformationServer), {
             id: this.tuya.id,
@@ -58,7 +58,7 @@ export class Tuya2MatterCover {
                     endpoint.set({ windowCovering: { currentPositionLiftPercent100ths } })
                 }
             })
-        ).subscribe() 
+        ).subscribe()
 
         await this.aggregator.add(endpoint)
 

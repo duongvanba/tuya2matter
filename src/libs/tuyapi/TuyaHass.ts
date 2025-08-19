@@ -1,7 +1,6 @@
 
 import got from 'got';
-import * as crypto from "crypto";
-import { sleep } from '../../helpers/sleep.js';
+import * as crypto from "crypto"; 
 import { firstValueFrom, from, interval, mergeMap, reduce, Subject, Subscription, toArray } from 'rxjs';
 import { DeviceMetadata } from './DeviceMetadata.js';
 
@@ -67,7 +66,7 @@ export class TuyaHass {
         const qrcode = 'tuyaSmart--qrLogin?token=' + token
         const next = async () => {
             for (let i = 1; i <= 30; i++) {
-                await sleep(5000)
+                await Bun.sleep(5000)
                 const result = await client(`qrcode/tokens/${token}`, {
                     searchParams: {
                         clientid: TUYA_CLIENT_ID,

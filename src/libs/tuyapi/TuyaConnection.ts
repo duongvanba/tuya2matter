@@ -3,7 +3,6 @@ import { CommandType, MessageParser } from './message-parser.js'
 import dgram from 'dgram'
 import { createHash } from 'crypto'
 import { TuyaSocket } from './TuyaSocket.js'
-import { sleep } from '../../helpers/sleep.js'
 import { DeviceMetadata } from './DeviceMetadata.js'
 
 const cap_first_char = (str: string) => `${str[0].toUpperCase}${str.slice(1)}`
@@ -133,7 +132,7 @@ export class TuyaConnection {
 
 
                 this.$status.next('connecting')
-                await sleep(1000)
+                await Bun.sleep(1000)
                 this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    => Connecting to ${this.config.name} - ip ${ip} `)
 
                 const { $error, end, socket } = await TuyaSocket.init(this.config.name, ip, this.config.port || 6668)

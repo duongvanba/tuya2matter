@@ -1,8 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { TuyaCredential, TuyaDeviceHomeMap, TuyaHass } from "../libs/tuyapi/TuyaHass.js";
 import { existsSync } from "fs";
-import QrCode from 'qrcode-terminal'
-import { sleep } from "../helpers/sleep.js";
+import QrCode from 'qrcode-terminal' 
 import { Behavior } from "@matter/main";
 import { BehaviorSubject } from "rxjs";
 
@@ -42,7 +41,7 @@ export class CloudSync extends BehaviorSubject<false | { api: TuyaHass, config: 
         const hass = await next()
         if (!hass) {
             console.error({ error: 'CAN_NOT_LOGIN' })
-            await sleep(5000)
+            await Bun.sleep(5000)
             process.exit(1)
         }
         return hass

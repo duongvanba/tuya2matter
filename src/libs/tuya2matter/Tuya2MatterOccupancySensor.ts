@@ -1,0 +1,59 @@
+import { AggregatorEndpoint, } from "@matter/main/endpoints/aggregator";
+import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
+import { Endpoint } from "@matter/main";
+import { OccupancySensorDevice } from "@matter/main/devices";
+import { BridgedDeviceBasicInformationServer, OccupancySensingBehavior } from "@matter/main/behaviors";
+import { mergeMap } from "rxjs";
+
+export class Tuya2MatterOccupancySensor {
+    constructor(
+        public readonly aggregator: Endpoint<AggregatorEndpoint>,
+        public readonly tuya: TuyaDevice
+    ) { }
+
+    async init() {
+
+        const name = this.tuya.name
+
+        const endpoint = new Endpoint(
+            OccupancySensorDevice.with(OccupancySensingBehavior).with(BridgedDeviceBasicInformationServer), {
+            id: this.tuya.id,
+            bridgedDeviceBasicInformation: {
+                nodeLabel: name,
+                productName: name,
+                productLabel: name,
+                serialNumber: `1`,
+                reachable: true,
+            },
+            occupancySensing: {
+                occupancySensorType: 0x03,
+                holdTime: 60,
+                holdTimeLimits: { holdTimeDefault: 10, holdTimeMax: 10, holdTimeMin: 1 },
+                pirUnoccupiedToOccupiedDelay: 10 
+            } as any 
+        })
+
+        this.tuya.$dps.pipe(
+            mergeMap(async dps => {
+                const presence_state = dps.presence_state
+                presence_state != undefined && endpoint.set({
+                    occupancySensing: {
+                        occupancy: { occupied: presence_state != 'none' } 
+                    }
+                })
+            })
+        ).subscribe()
+
+        await this.aggregator.add(endpoint)
+
+
+
+
+
+
+
+
+    }
+
+
+}
