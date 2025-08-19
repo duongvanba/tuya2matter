@@ -25,7 +25,7 @@ export class MatterService {
         const productName = 'tuya-matter-bridge'
         const deviceName = 'Tuya Matter Bridge'
         const vendorName = 'tuya-matter-bridge'
-        const passcode = 22091997
+        const passcode = 12345678910
         const discriminator = 3840
         const vendorId = 65521
         const port = 12356
