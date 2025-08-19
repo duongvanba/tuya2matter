@@ -1,6 +1,3 @@
-process.env.MATTER_NODEJS_CRYPTO = '0'
-
-
 import { Module } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core"; 
 import { CloudSync } from "./services/CloudSync.js";

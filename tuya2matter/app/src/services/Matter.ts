@@ -1,11 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import { Endpoint, ServerNode, VendorId, Environment, StorageService, Logger } from "@matter/main";
 import { AggregatorEndpoint } from "@matter/main/endpoints/aggregator";
-
+import QR from 'qrcode-terminal'
 const storageService = Environment.default.get(StorageService)
 storageService.location = './.matter'
 
-// Logger.level = 'warn'
+Logger.level = 'warn'
 
 @Injectable()
 export class MatterService {
@@ -59,7 +59,10 @@ export class MatterService {
         });
         await server.add(aggregator)
         this.#aggregator = aggregator
-        await server.start()  
+        await server.start()
+        const { qrPairingCode  } = server.state.commissioning.pairingCodes;
+        console.log(`Matter QRCODE: `)
+        QR.generate(qrPairingCode)
 
     }
 }
