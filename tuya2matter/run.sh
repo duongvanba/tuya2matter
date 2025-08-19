@@ -12,4 +12,5 @@ fi
 echo "[tuya2matter] Starting… USER_CODE='${USER_CODE}'"
 
 # Chạy app bằng Bun
+export MATTER_NODEJS_CRYPTO=0
 exec bun run ./src/index.ts
