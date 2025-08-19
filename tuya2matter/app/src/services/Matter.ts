@@ -25,7 +25,7 @@ export class MatterService {
         const productName = 'tuya-matter-bridge'
         const deviceName = 'Tuya Matter Bridge'
         const vendorName = 'tuya-matter-bridge'
-        const passcode = 12345678910
+        const passcode = 20202021
         const discriminator = 3840
         const vendorId = 65521
         const port = 12356
@@ -61,8 +61,9 @@ export class MatterService {
         this.#aggregator = aggregator
         await server.start()
         const { qrPairingCode  } = server.state.commissioning.pairingCodes;
-        console.log(`Matter QRCODE: `)
+        console.log(`\nMatter QRCODE: \n`)
         QR.generate(qrPairingCode)
+        console.log('\n\n')
 
     }
 }

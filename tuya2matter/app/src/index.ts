@@ -9,10 +9,10 @@ import { LocalService } from "./services/Local.js";
 
 @Module({
     providers: [
-        CloudSync,
-        SyncService,
+        // CloudSync,
+        // SyncService,
         MatterService,
-        LocalService
+        // LocalService
     ]
 })
 export class AppMoule { }
