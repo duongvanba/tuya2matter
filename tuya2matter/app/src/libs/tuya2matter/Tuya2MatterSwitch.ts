@@ -40,7 +40,7 @@ export class Tuya2MatterSwitch {
                     id: code,
                     type,
                     onOff: { onOff: false },
-                    name: code
+                    name: code 
                 }
             }),
             bridgedDeviceBasicInformation: {

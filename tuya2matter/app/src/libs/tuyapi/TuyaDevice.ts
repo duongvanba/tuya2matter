@@ -43,7 +43,7 @@ export class TuyaDevice {
         private connection: TuyaConnection,
         public readonly config: DeviceMetadata
     ) {
-        const [dps$, unregister] = connection.registerDps(config.node_id)
+        const [dps$, unregister] = connection.registerDps(config.uuid)
         merge(
 
             // Dps sync
@@ -93,7 +93,7 @@ export class TuyaDevice {
 
             // Sync with sub report from connection
             this.connection.$subDevReports.pipe(
-                filter(d => d.id == config.node_id),
+                filter(d => d.id == config.uuid),
                 tap(dev => this.$status.next(dev.online ? 'online' : 'offline'))
             )
         ).pipe(
@@ -108,7 +108,7 @@ export class TuyaDevice {
 
 
     get uniquee_device_id() {
-        return this.config.node_id || this.device_id
+        return this.config.uuid || this.device_id
     }
 
     get mapping() {
@@ -142,7 +142,7 @@ export class TuyaDevice {
 
 
         return this.connection.setDps({
-            sub_device_id: this.config.node_id,
+            sub_device_id: this.config.uuid,
             dps: this.#toRawDps(raw_dps)
         })
     }
@@ -161,7 +161,7 @@ export class TuyaDevice {
     }
 
     async sync() {
-        await this.connection.sync(this.config.node_id)
+        await this.connection.sync(this.config.uuid)
     }
 
     close() {

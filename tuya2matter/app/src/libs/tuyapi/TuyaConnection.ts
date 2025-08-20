@@ -121,7 +121,7 @@ export class TuyaConnection {
             process.env.TUYA2MQTT_DEBUG == 'all'
             || process.env.TUYA2MQTT_DEBUG?.includes(this.config.id)
             || (
-                this.config.node_id && process.env.TUYA2MQTT_DEBUG?.includes(this.config.node_id)
+                this.config.uuid && process.env.TUYA2MQTT_DEBUG?.includes(this.config.uuid)
             )
         )
         this.#$metadata.pipe(

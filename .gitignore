@@ -15,3 +15,4 @@ tuya2matter/app/.matter
 tuya2matter/app/.tuya
 tuya2matter/app/node_modules
 tuya2matter/app/build
+tuya2matter/app/.env
