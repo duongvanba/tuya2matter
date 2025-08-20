@@ -3,7 +3,7 @@ import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint } from "@matter/main";
 import { ContactSensorDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer } from "@matter/main/behaviors";
-import { PowerSourceBaseServer, } from "@matter/main/behaviors/power-source";
+import { PowerSourceBaseServer } from "@matter/main/behaviors/power-source";
 import { mergeMap } from "rxjs";
 
 
@@ -25,7 +25,7 @@ export class Tuya2MatterBinarySensor {
                 nodeLabel: name,
                 productName: name,
                 productLabel: name,
-                serialNumber: `1`,
+                serialNumber: this.tuya.config.uuid,
                 reachable: true,
             },
             booleanState: { stateValue: true },

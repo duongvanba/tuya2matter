@@ -5,7 +5,7 @@ export type DeviceMetadata = {
     version: string
     local_key: string
     category: string
-    node_id?: string
+    uuid: string
     name: string
     mac: string
     sub: boolean,

@@ -3,8 +3,8 @@ import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint } from "@matter/main";
 import { GenericSwitchDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer, SwitchServer } from "@matter/main/behaviors";
-import { EMPTY } from "rxjs";
-
+import { EMPTY, mergeMap } from "rxjs";
+import { PowerSourceBaseServer, } from "@matter/main/behaviors/power-source";
 
 
 export class Tuya2MatterButton {
@@ -18,48 +18,61 @@ export class Tuya2MatterButton {
         const name = this.tuya.name
 
         const endpoint = new Endpoint(
-            GenericSwitchDevice.with(BridgedDeviceBasicInformationServer).with(SwitchServer.with("MomentarySwitch")), {
+            GenericSwitchDevice.with(BridgedDeviceBasicInformationServer).with(SwitchServer.with("MomentarySwitch")).with(PowerSourceBaseServer), {
             id: this.tuya.id,
             bridgedDeviceBasicInformation: {
                 nodeLabel: name,
                 productName: name,
                 productLabel: name,
-                serialNumber: `1`,
+                serialNumber: this.tuya.config.uuid,
                 reachable: true,
             },
             switch: {
-                currentPosition: 1,
-                debounceDelay: 500,
-                longPressDelay: 500,
-                momentaryNeutralPosition: 1,
-                multiPressDelay: 1000,
-                numberOfPositions: 4,
-                rawPosition: 1
+                currentPosition: 0,
+                debounceDelay: 30,
+                longPressDelay: 600,
+                momentaryNeutralPosition: 0,
+                multiPressDelay: 400,
+                numberOfPositions: 10,
+                rawPosition: 0
+            },
+            powerSource: {
+                status: 1,
+                batPercentRemaining: 100,
+                order: 3,
+                description: "pin",
+                batChargeLevel: 0,
+                batReplacementNeeded: false,
+                batReplaceability: 2,
+                activeBatChargeFaults: [],
+                activeBatFaults: [],
+                batCapacity: 220,
+                batChargeState: 0,
+                batChargingCurrent: 0,
+                batFunctionalWhileCharging: true,
+                batPresent: true,
+                batTimeRemaining: 0xFFFFFFFF,
+                batTimeToFullCharge: 0xFFFFFFFF,
+                batVoltage: 3
             }
         })
 
-        const observable = EMPTY 
+        const observable = this.tuya.$dps.pipe(
+            mergeMap(async dps => {
+                const percent = dps.battery_percentage
+                endpoint.set({
+                    powerSource: {
+                        status: 1,
+                        batPercentRemaining: Number(percent)
+                    },
+                    switch: {
+                        currentPosition: endpoint.state.switch.currentPosition + 1
+                    }
+                })
+            })
+        )
 
-        // this.tuya.$dps.pipe(
-        //     mergeMap(async dps => {
-        //         const onoff = dps.doorcontact_state
-        //         const percent = dps.battery_percentage
-        //         door.set({
-        //             ...onoff !== undefined ? {
-        //                 booleanState: {
-        //                     stateValue: !onoff,
-        //                 }
-        //             } : {},
-        //             ...percent != undefined ? {
-        //                 powerSource: {
-        //                     status: 1,
-        //                     batPercentRemaining: Number(percent)
-        //                 }
-        //             } : {}
-        //         })
-        //     })
-        // ).subscribe()
-        
+
 
         return { endpoint, observable }
 

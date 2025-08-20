@@ -40,13 +40,14 @@ export class Tuya2MatterSwitch {
                     id: code,
                     type,
                     onOff: { onOff: false },
+                    name: code
                 }
             }),
             bridgedDeviceBasicInformation: {
                 nodeLabel: name,
                 productName: name,
                 productLabel: name,
-                serialNumber: `1`,
+                serialNumber: this.tuya.config.uuid,
                 reachable: true,
             },
 
@@ -61,9 +62,9 @@ export class Tuya2MatterSwitch {
                     }
                 })
             })
-        ) 
+        )
 
-        return { endpoint, observable }  
+        return { endpoint, observable }
 
     }
 

@@ -41,7 +41,7 @@ export class Tuya2MatterCover {
                 nodeLabel: name,
                 productName: name,
                 productLabel: name,
-                serialNumber: `1`,
+                   serialNumber: this.tuya.config.uuid,
                 reachable: true,
             }
         })

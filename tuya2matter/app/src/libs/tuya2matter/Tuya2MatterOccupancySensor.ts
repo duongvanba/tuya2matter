@@ -22,7 +22,7 @@ export class Tuya2MatterOccupancySensor {
                 nodeLabel: name,
                 productName: name,
                 productLabel: name,
-                serialNumber: `1`,
+                  serialNumber: this.tuya.config.uuid,
                 reachable: true,
             },
             occupancySensing: {
