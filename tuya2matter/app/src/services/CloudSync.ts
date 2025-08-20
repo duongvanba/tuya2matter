@@ -37,7 +37,7 @@ export class CloudSync extends BehaviorSubject<false | { api: TuyaHass, config: 
         }
         const { next, qrcode } = await TuyaHass.login(process.env.USER_CODE!)
         console.log(`Scan qr code bellow: `)
-        QrCode.generate(qrcode, { small: true })
+        QrCode.generate(qrcode )
         const hass = await next()
         if (!hass) {
             console.error({ error: 'CAN_NOT_LOGIN' })
