@@ -41,10 +41,10 @@ export class Tuya2Matter {
 
             // First sync
             from(this.tuya.sync()).pipe(
-                switchMap(() => this.tuya.$status),
-                tap(status => {
-                    link.endpoint.set({ bridgedDeviceBasicInformation: { reachable: status == 'online' } })
-                })
+                // switchMap(() => this.tuya.$status),
+                // tap(status => {
+                //     link.endpoint.set({ bridgedDeviceBasicInformation: { reachable: status == 'online' } })
+                // })
             )
 
         ).pipe(
