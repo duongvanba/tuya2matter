@@ -32,15 +32,15 @@ export class Tuya2Matter {
         if (!device) return
         const link = device.link()
 
-        this.aggregator.add(link.endpoint)
+        await this.aggregator.add(link.endpoint)
 
         merge(
             // Sync state
             link.observable,
- 
+
             // First sync
             from(this.tuya.sync()).pipe(
-                // switchMap(() => this.tuya.$status),
+                switchMap(() => this.tuya.$status),
                 // tap(status => {
                 //     link.endpoint.set({ bridgedDeviceBasicInformation: { reachable: status == 'online' } })
                 // })
