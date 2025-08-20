@@ -27,18 +27,17 @@ export class Tuya2Matter {
         if (this.tuya.category == 'wxkg') return new Tuya2MatterButton(this.aggregator, this.tuya)
     }
 
-    init() {
+    async init() {
         const device = this.#getMapper()
         if (!device) return
         const link = device.link()
 
+        this.aggregator.add(link.endpoint)
+
         merge(
             // Sync state
             link.observable,
-
-            // Add endpoint
-            from(this.aggregator.add(link.endpoint)),
-
+ 
             // First sync
             from(this.tuya.sync()).pipe(
                 // switchMap(() => this.tuya.$status),
