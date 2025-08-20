@@ -11,7 +11,7 @@ export class Tuya2MatterOccupancySensor {
         public readonly tuya: TuyaDevice
     ) { }
 
-    async init() {
+    link() {
 
         const name = this.tuya.name
 
@@ -29,22 +29,22 @@ export class Tuya2MatterOccupancySensor {
                 occupancySensorType: 0x03,
                 holdTime: 60,
                 holdTimeLimits: { holdTimeDefault: 10, holdTimeMax: 10, holdTimeMin: 1 },
-                pirUnoccupiedToOccupiedDelay: 10 
-            } as any 
+                pirUnoccupiedToOccupiedDelay: 10
+            } as any
         })
 
-        this.tuya.$dps.pipe(
+        const observable = this.tuya.$dps.pipe(
             mergeMap(async dps => {
                 const presence_state = dps.presence_state
                 presence_state != undefined && endpoint.set({
                     occupancySensing: {
-                        occupancy: { occupied: presence_state != 'none' } 
+                        occupancy: { occupied: presence_state != 'none' }
                     }
                 })
             })
-        ).subscribe()
+        ) 
 
-        await this.aggregator.add(endpoint)
+        return { endpoint, observable }
 
 
 

@@ -16,7 +16,7 @@ export class Tuya2MatterCover {
         public readonly tuya: TuyaDevice
     ) { }
 
-    async init() {
+    link() {
 
         const name = this.tuya.name
 
@@ -31,7 +31,7 @@ export class Tuya2MatterCover {
                     direction: MovementDirection,
                     targetPercent100ths?: number,
                 ) {
-                    targetPercent100ths != undefined && tuya.set_dps({
+                    targetPercent100ths != undefined && tuya.setDps({
                         percent_control: targetPercent100ths / 100
                     })
                 }
@@ -46,7 +46,7 @@ export class Tuya2MatterCover {
             }
         })
 
-        this.tuya.$dps.pipe(
+        const observable = this.tuya.$dps.pipe(
             mergeMap(async dps => {
                 if (dps.percent_control != undefined) {
                     const targetPositionLiftPercent100ths = Number(dps.percent_control) * 100
@@ -58,9 +58,12 @@ export class Tuya2MatterCover {
                     endpoint.set({ windowCovering: { currentPositionLiftPercent100ths } })
                 }
             })
-        ).subscribe()
+        ) 
 
-        await this.aggregator.add(endpoint)
+        return {
+            endpoint: endpoint as any as Endpoint<any>,
+            observable
+        }
 
 
 

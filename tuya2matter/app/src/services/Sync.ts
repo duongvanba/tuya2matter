@@ -1,10 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { MatterService } from "./Matter.js";
-import { CloudSync } from "./CloudSync.js";
 import { LocalService } from "./Local.js";
-import { map, mergeMap } from "rxjs";
-import { OnOffLightDevice } from "@matter/main/devices";
-import { Endpoint } from "@matter/main";
+import { mergeMap } from "rxjs";
 import { Tuya2Matter } from "../libs/tuya2matter/Tuya2Matter.js";
 
 

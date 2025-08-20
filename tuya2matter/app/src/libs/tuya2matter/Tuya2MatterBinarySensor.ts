@@ -1,13 +1,10 @@
 import { AggregatorEndpoint, } from "@matter/main/endpoints/aggregator";
 import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint } from "@matter/main";
-import { BatteryStorageRequirements, ContactSensorDevice } from "@matter/main/devices";
+import { ContactSensorDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer } from "@matter/main/behaviors";
 import { PowerSourceBaseServer, } from "@matter/main/behaviors/power-source";
 import { mergeMap } from "rxjs";
-import { BatteryStorageDevice } from "@matter/main/devices";
-import { PowerSourceCluster, GroupsCluster } from "@matter/main/clusters";
-import { percent } from "@matter/main/model";
 
 
 
@@ -17,11 +14,11 @@ export class Tuya2MatterBinarySensor {
         public readonly tuya: TuyaDevice
     ) { }
 
-    async init() {
+    link() {
 
         const name = this.tuya.name
 
-        const door = new Endpoint(
+        const endpoint = new Endpoint(
             ContactSensorDevice.with(BridgedDeviceBasicInformationServer).with(PowerSourceBaseServer), {
             id: this.tuya.id,
             bridgedDeviceBasicInformation: {
@@ -55,11 +52,11 @@ export class Tuya2MatterBinarySensor {
 
 
 
-        this.tuya.$dps.pipe(
+        const observable = this.tuya.$dps.pipe(
             mergeMap(async dps => {
                 const onoff = dps.doorcontact_state
                 const percent = dps.battery_percentage
-                door.set({
+                endpoint.set({
                     ...onoff !== undefined ? {
                         booleanState: {
                             stateValue: !onoff,
@@ -73,9 +70,9 @@ export class Tuya2MatterBinarySensor {
                     } : {}
                 })
             })
-        ).subscribe()
+        ) 
 
-        await this.aggregator.add(door)
+        return { endpoint, observable }
 
 
     }

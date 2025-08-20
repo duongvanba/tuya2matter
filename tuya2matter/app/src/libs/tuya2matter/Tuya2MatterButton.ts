@@ -3,6 +3,7 @@ import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint } from "@matter/main";
 import { GenericSwitchDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer, SwitchServer } from "@matter/main/behaviors";
+import { EMPTY } from "rxjs";
 
 
 
@@ -12,11 +13,11 @@ export class Tuya2MatterButton {
         public readonly tuya: TuyaDevice
     ) { }
 
-    async init() {
+    link() {
 
         const name = this.tuya.name
 
-        const button = new Endpoint(
+        const endpoint = new Endpoint(
             GenericSwitchDevice.with(BridgedDeviceBasicInformationServer).with(SwitchServer.with("MomentarySwitch")), {
             id: this.tuya.id,
             bridgedDeviceBasicInformation: {
@@ -37,7 +38,7 @@ export class Tuya2MatterButton {
             }
         })
 
-
+        const observable = EMPTY 
 
         // this.tuya.$dps.pipe(
         //     mergeMap(async dps => {
@@ -58,8 +59,9 @@ export class Tuya2MatterButton {
         //         })
         //     })
         // ).subscribe()
+        
 
-        await this.aggregator.add(button)
+        return { endpoint, observable }
 
 
     }

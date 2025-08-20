@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { TuyaCredential, TuyaDeviceHomeMap, TuyaHass } from "../libs/tuyapi/TuyaHass.js";
 import { existsSync } from "fs";
-import QrCode from 'qrcode-terminal' 
+import QrCode from 'qrcode-terminal'
 import { Behavior } from "@matter/main";
 import { BehaviorSubject } from "rxjs";
 
@@ -9,10 +9,10 @@ import { BehaviorSubject } from "rxjs";
 @Injectable()
 export class CloudSync extends BehaviorSubject<false | { api: TuyaHass, config: TuyaDeviceHomeMap }> {
 
-    readonly #DIR = './.tuya'
+    readonly #DIR = existsSync('/data') ? '/data/tuya' : './.tuya'
     readonly #CREDENTIAL_PATH = `${this.#DIR}/credential.json`
-    readonly #DEVICES_PATH = `${this.#DIR}/devices.json` 
- 
+    readonly #DEVICES_PATH = `${this.#DIR}/devices.json`
+
 
 
     async onModuleInit() {
