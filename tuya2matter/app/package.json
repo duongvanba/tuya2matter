@@ -1,11 +1,10 @@
 {
   "name": "tuya2matter",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "dependencies": {
     "@matter/main": "^0.15.3",
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
-    "@types/bun": "^1.2.20",
     "env-cmd": "^10.1.0",
     "got": "^14.4.7",
     "mqtt": "^4.3.7",
@@ -18,6 +17,7 @@
     "start": "bun run src/index.ts"
   },
   "devDependencies": {
+    "@types/bun": "^1.2.20",
     "@types/ping": "^0.4.4",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/node": "^20.4.0",

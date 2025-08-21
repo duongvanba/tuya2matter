@@ -50,17 +50,7 @@ export class Tuya2MatterButton {
             parts: [1, 2, 3, 4].map(n => {
                 return {
                     id: `switch${n}_value`,
-                    type: GenericSwitchDevice.with(SwitchServer.with("MomentarySwitchMultiPress", "MomentarySwitchRelease", "MomentarySwitch")),
-                    switch: {
-                        longPressDelay: 2000,
-                        currentPosition: 0,
-                        debounceDelay: 100,
-                        momentaryNeutralPosition: 0,
-                        multiPressDelay: 500,
-                        multiPressMax: 2,
-                        numberOfPositions: 1,
-                        rawPosition: 0
-                    }
+                    type: GenericSwitchDevice.with(SwitchServer.with("MomentarySwitchMultiPress", "MomentarySwitchRelease", "MomentarySwitch")) 
                 }
             }),
 
