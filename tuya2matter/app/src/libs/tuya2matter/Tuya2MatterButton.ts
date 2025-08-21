@@ -2,8 +2,8 @@ import { AggregatorEndpoint, } from "@matter/main/endpoints/aggregator";
 import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint } from "@matter/main";
 import { GenericSwitchDevice } from "@matter/main/devices";
-import { BridgedDeviceBasicInformationServer, SwitchServer, BasicInformationServer } from "@matter/main/behaviors";
-import { EMPTY, filter, from, lastValueFrom, map, mergeMap, skip } from "rxjs";
+import { BridgedDeviceBasicInformationServer, SwitchServer } from "@matter/main/behaviors";
+import { filter, from, lastValueFrom, map, mergeMap, skip } from "rxjs";
 import { PowerSourceBaseServer, } from "@matter/main/behaviors/power-source";
 import { } from "@matter/main/behaviors/switch";
 
@@ -19,7 +19,7 @@ export class Tuya2MatterButton {
         const name = this.tuya.name
 
         const endpoint = new Endpoint(
-            GenericSwitchDevice.with(BridgedDeviceBasicInformationServer).with(PowerSourceBaseServer), {
+            GenericSwitchDevice.with(BridgedDeviceBasicInformationServer).with(PowerSourceBaseServer).with(SwitchServer.with("MomentarySwitchMultiPress", "MomentarySwitchRelease", "MomentarySwitch")), {
             id: this.tuya.id,
             bridgedDeviceBasicInformation: {
                 nodeLabel: name,
@@ -50,10 +50,20 @@ export class Tuya2MatterButton {
             parts: [1, 2, 3, 4].map(n => {
                 return {
                     id: `switch${n}_value`,
-                    type: GenericSwitchDevice.with(SwitchServer.with("MomentarySwitchMultiPress", "MomentarySwitchRelease", "MomentarySwitch"))
-
+                    type: GenericSwitchDevice.with(SwitchServer.with("MomentarySwitchMultiPress", "MomentarySwitchRelease", "MomentarySwitch")),
+                    switch: {
+                        longPressDelay: 2000,
+                        currentPosition: 0,
+                        debounceDelay: 100,
+                        momentaryNeutralPosition: 0,
+                        multiPressDelay: 500,
+                        multiPressMax: 2,
+                        numberOfPositions: 1,
+                        rawPosition: 0
+                    }
                 }
-            })
+            }),
+
         })
 
 
@@ -81,42 +91,29 @@ export class Tuya2MatterButton {
                                 rawPosition: 1
                             }
                         })
-                        await Bun.sleep(100)
-
-                        if (type != 'single_click') {
-                            if (type == 'double_click') {
-                                await Bun.sleep(100)
-                                target.set({
-                                    switch: {
-                                        currentPosition: 0,
-                                        rawPosition: 0
-                                    }
-                                } as any)
-                                await Bun.sleep(100)
-                                target.set({
-                                    switch: {
-                                        currentPosition: 1,
-                                        rawPosition: 1
-                                    }
-                                })
-                                await Bun.sleep(100)
-                                target.set({
-                                    switch: {
-                                        currentPosition: 0,
-                                        rawPosition: 0
-                                    }
-                                })
-                            } else {
-                                await Bun.sleep(4000)
-                            }
-                        }
-
+                        await Bun.sleep(150)
                         target.set({
                             switch: {
                                 currentPosition: 0,
                                 rawPosition: 0
                             }
                         })
+                        if (type != 'single_click') {
+                            target.set({
+                                switch: {
+                                    currentPosition: 1,
+                                    rawPosition: 1
+                                }
+                            } as any)
+                            await Bun.sleep(150)
+                            target.set({
+                                switch: {
+                                    currentPosition: 0,
+                                    rawPosition: 0
+                                }
+                            })
+                        }
+
                     })
                 ), { defaultValue: [] })
             })
