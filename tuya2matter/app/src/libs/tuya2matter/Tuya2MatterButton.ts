@@ -81,7 +81,6 @@ export class Tuya2MatterButton {
                                 rawPosition: 1
                             }
                         })
-                        await Bun.sleep(150)
                         target.set({
                             switch: {
                                 currentPosition: 0,
@@ -95,7 +94,6 @@ export class Tuya2MatterButton {
                                     rawPosition: 1
                                 }
                             } as any)
-                            await Bun.sleep(150)
                             target.set({
                                 switch: {
                                     currentPosition: 0,
