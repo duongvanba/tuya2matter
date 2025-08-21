@@ -1,12 +1,14 @@
 
 import got from 'got';
-import * as crypto from "crypto"; 
-import { firstValueFrom, from, interval, mergeMap, reduce, Subject, Subscription, toArray } from 'rxjs';
+import * as crypto from "crypto";
+import { BehaviorSubject, finalize, firstValueFrom, from, interval, mergeMap, reduce, ReplaySubject, Subject, toArray } from 'rxjs';
 import { DeviceMetadata } from './DeviceMetadata.js';
+import { Observable } from 'rxjs';
+import { ReadableDps } from './TuyaLocal.js';
 
 
-const TUYA_CLIENT_ID = 'HA_3y9q4ak7g4ephrvke';
-const TUYA_SCHEMA = 'haauthorize';
+const TUYA_CLIENT_ID = 'HA_3y9q4ak7g4ephrvke'
+const TUYA_SCHEMA = 'haauthorize'
 
 export type Dict = Record<string, any>
 
@@ -40,10 +42,12 @@ export type TuyaDeviceHomeMap = {
     }
 }
 
-export class TuyaHass {
+export class TuyaCloud {
 
-    #autoRefresh: Subscription
     public readonly credential = new Subject<TuyaCredential>
+    public online$ = new BehaviorSubject(false)
+    public readonly $stop = new ReplaySubject<void>(1)
+
 
     static async getCredential(usercode: string) {
         const client = got.extend({
@@ -101,9 +105,10 @@ export class TuyaHass {
     }
 
     constructor(public readonly config: TuyaCredential) {
-        this.#autoRefresh = from(this.refresh()).pipe(
+        from(this.refresh()).pipe(
             mergeMap(() => interval(7100 * 1000)),
-            mergeMap(() => this.refresh())
+            mergeMap(() => this.refresh()),
+            finalize(() => this.$stop.next())
         ).subscribe()
     }
 
@@ -274,7 +279,7 @@ export class TuyaHass {
             mergeMap(async home => {
                 const all_devices = await this.listDevices(home.ownerId)
                 const a = Date.now()
-                console.log({ home: home.name, devices: all_devices.length })
+                console.log({ found: home.name, devices: all_devices.length, status: 'checking' })
                 const list = await firstValueFrom(from(all_devices).pipe(
                     mergeMap(async device => {
                         const r = await this.getDeviceStatus(device.id)
@@ -301,7 +306,8 @@ export class TuyaHass {
                 console.log({
                     home: home.name,
                     devices: all_devices.length,
-                    ms: Date.now() - a
+                    status: 'done',
+                    time: Date.now() - a
                 })
                 const hubs = list.filter(
                     c => !c.sub && c.product_name.toLowerCase().includes('gateway')
@@ -342,7 +348,17 @@ export class TuyaHass {
     }
 
     [Symbol.dispose]() {
-        this.#autoRefresh?.unsubscribe()
+        this.$stop.next()
+    }
+
+    watch(_device_id: string) {
+        return new Observable<ReadableDps>(_o => {
+
+        })
+    }
+
+    async sendCommand(device_id: string, dps: ReadableDps) {
+
     }
 
 

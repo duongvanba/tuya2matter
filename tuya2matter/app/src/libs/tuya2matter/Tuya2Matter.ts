@@ -6,7 +6,7 @@ import { Tuya2MatterCover } from "./Tuya2MatterCover.js";
 import { Tuya2MatterOccupancySensor } from "./Tuya2MatterOccupancySensor.js";
 import { Tuya2MatterBinarySensor } from "./Tuya2MatterBinarySensor.js";
 import { Tuya2MatterButton } from "./Tuya2MatterButton.js";
-import { BehaviorSubject, filter, from, merge, switchMap, takeUntil, tap } from "rxjs";
+import { BehaviorSubject, filter, from, merge, of, skip, switchMap, takeUntil, tap } from "rxjs";
 
 
 
@@ -32,7 +32,9 @@ export class Tuya2Matter {
         if (!device) return
         const link = device.link()
 
-        await this.aggregator.add(link.endpoint)
+        for (const e of link.endpoints) {
+            await this.aggregator.add(e)
+        }
 
         merge(
             // Sync state
@@ -41,9 +43,11 @@ export class Tuya2Matter {
             // First sync
             from(this.tuya.sync()).pipe(
                 switchMap(() => this.tuya.$status),
-                // tap(status => {
-                //     link.endpoint.set({ bridgedDeviceBasicInformation: { reachable: status == 'online' } })
-                // })
+                tap(status => {
+                    link.endpoints.forEach(
+                        e => e.set({ bridgedDeviceBasicInformation: { reachable: status == 'online' } } as any)
+                    )
+                })
             )
 
         ).pipe(

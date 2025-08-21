@@ -1,13 +1,12 @@
 import { Injectable } from "@nestjs/common";
-import { TuyaCredential, TuyaDeviceHomeMap, TuyaHass } from "../libs/tuyapi/TuyaHass.js";
+import { TuyaCredential, TuyaDeviceHomeMap, TuyaCloud } from "../libs/tuyapi/TuyaCloud.js";
 import { existsSync } from "fs";
 import QrCode from 'qrcode-terminal'
-import { Behavior } from "@matter/main";
 import { BehaviorSubject } from "rxjs";
 
 
 @Injectable()
-export class CloudSync extends BehaviorSubject<false | { api: TuyaHass, config: TuyaDeviceHomeMap }> {
+export class CloudConfig extends BehaviorSubject<false | { api: TuyaCloud, config: TuyaDeviceHomeMap }> {
 
     readonly #DIR = existsSync('/data') ? '/data/tuya' : './.tuya'
     readonly #CREDENTIAL_PATH = `${this.#DIR}/credential.json`
@@ -33,9 +32,9 @@ export class CloudSync extends BehaviorSubject<false | { api: TuyaHass, config: 
     async #getClient() {
         if (existsSync(this.#CREDENTIAL_PATH)) {
             const config = await Bun.file(this.#CREDENTIAL_PATH).json() as TuyaCredential
-            return new TuyaHass(config)
+            return new TuyaCloud(config)
         }
-        const { next, qrcode } = await TuyaHass.login(process.env.USER_CODE!)
+        const { next, qrcode } = await TuyaCloud.login(process.env.USER_CODE!)
         console.log(`Scan qr code bellow: `)
         QrCode.generate(qrcode )
         const hass = await next()

@@ -3,7 +3,7 @@ import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint, MaybePromise } from "@matter/main";
 import { GenericSwitchDevice, GenericSwitchRequirements, OnOffPlugInUnitRequirements, OnOffPlugInUnitDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer } from "@matter/main/behaviors";
-import { tap } from "rxjs";
+import { map, tap } from "rxjs";
 
 
 
@@ -20,27 +20,26 @@ export class Tuya2MatterSwitch {
         const switches = Object.entries(this.tuya.config.mapping).filter(
             ([k, v]) => SWITCH_CODES.includes(k)
         )
-
         const name = this.tuya.name
-
         const tuya = this.tuya
-
 
         const endpoint = new Endpoint(GenericSwitchDevice.with(BridgedDeviceBasicInformationServer), {
             id: this.tuya.id,
             parts: switches.map(([name, { code }], index) => {
                 const type = OnOffPlugInUnitDevice.withBehaviors(class extends OnOffPlugInUnitRequirements.OnOffServer {
-                    override initialize(): MaybePromise {
-                        this.events.onOff$Changed.on(on => {
-                            tuya.setDps({ [name]: on })
-                        })
+                    override initialize(): MaybePromise { }
+                    override on() {
+                        tuya.setDps({ [code]: true })
+                    }
+                    override off() {
+                        tuya.setDps({ [code]: false })
                     }
                 })
                 return {
                     id: code,
                     type,
                     onOff: { onOff: false },
-                    name: code 
+                    name: code
                 }
             }),
             bridgedDeviceBasicInformation: {
@@ -48,12 +47,12 @@ export class Tuya2MatterSwitch {
                 productName: name,
                 productLabel: name,
                 serialNumber: this.tuya.config.uuid,
-                reachable: true,
-            },
-
+                reachable: false 
+            }
         })
 
         const observable = tuya.$dps.pipe(
+            map(d => d.last),
             tap(dps => {
                 Object.entries(dps).forEach(([key, on]) => {
                     if (SWITCH_CODES.includes(key)) {
@@ -64,7 +63,10 @@ export class Tuya2MatterSwitch {
             })
         )
 
-        return { endpoint, observable }
+        return {
+            endpoints: [endpoint],
+            observable
+        }
 
     }
 

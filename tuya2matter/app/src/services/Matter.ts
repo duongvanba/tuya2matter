@@ -3,6 +3,7 @@ import { Endpoint, ServerNode, VendorId, Environment, StorageService, Logger } f
 import { AggregatorEndpoint } from "@matter/main/endpoints/aggregator";
 import QR from 'qrcode-terminal'
 import { existsSync } from "fs";
+import { ReplaySubject } from "rxjs";
 const storageService = Environment.default.get(StorageService)
 
 
@@ -12,13 +13,8 @@ Logger.level = 'warn'
 @Injectable()
 export class MatterService {
 
-    #aggregator: Endpoint<AggregatorEndpoint>
+    aggregator$ = new ReplaySubject<Endpoint<AggregatorEndpoint>>(1)
 
-
-
-    get aggregator() {
-        return this.#aggregator
-    }
 
 
     async onModuleInit() {
@@ -60,7 +56,7 @@ export class MatterService {
             id: "aggregator"
         });
         await server.add(aggregator)
-        this.#aggregator = aggregator
+        this.aggregator$.next(aggregator)
         await server.start()
         if (!server.state.commissioning.commissioned) {
             const { qrPairingCode } = server.state.commissioning.pairingCodes;

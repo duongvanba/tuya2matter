@@ -1,0 +1,66 @@
+import { Injectable } from "@nestjs/common";
+import { TuyaDevice } from "../libs/tuyapi/TuyaDevice.js";
+import { filter, first, firstValueFrom, groupBy, mergeAll, mergeMap, Observable, Subject, switchMap, tap } from "rxjs";
+import { CloudConfig } from "./CloudConfig.js";
+import { TuyaLocal } from "../libs/tuyapi/TuyaLocal.js";
+
+
+
+
+@Injectable()
+export class TuyaDeviceService extends Subject<TuyaDevice> {
+
+    #connections = new Map<string, TuyaLocal>
+    #devices = new Set<string>
+
+    constructor(
+        private cloud: CloudConfig
+    ) {
+        super()
+        this.cloud.pipe(
+            filter(Boolean),
+            first(),
+            switchMap(({ config }) => TuyaLocal.watch().pipe(
+                // filter(d => d.gwId == 'eb30c1e7a5348e3504ian1'),
+                groupBy($ => $.gwId),
+                mergeMap($ => $.pipe(
+                    mergeMap(async $ => {
+                        if (this.#connections.has($.gwId)) {
+                            const connection = this.#connections.get($.gwId)!
+                            connection.connect($)
+                            return []
+                        }
+                        const metadata = config.devices[$.gwId]
+                        if (!metadata || this.#devices.has(metadata.id)) return []
+
+                        this.#devices.add(metadata.id)
+                        const subs = metadata.is_gateway ? (
+                            Object.values(config.devices).filter(d => d.sub && d.gateway_id == metadata.id && !this.#devices.has(d.id))
+                        ) : null
+                        subs && subs.forEach(d => this.#devices.add(d.id))
+
+                        console.log(`[${metadata.id}] Found ${metadata.name} on ${$.ip}`)
+                        const connection = new TuyaLocal(metadata, subs)
+                        connection.connect($)
+                        await firstValueFrom(connection.$status.pipe(
+                            filter(s => s == 'online')
+                        ))
+                        this.#connections.set($.gwId, connection)
+                        const devices = [
+                            ...metadata.is_gateway ? [] : [new TuyaDevice({ ...metadata, ip: $.ip })],
+                            ...subs ? subs.map(m => new TuyaDevice({ ...m, ip: $.ip })) : []
+                        ]
+                        devices.forEach(d => d.linkLocal(connection))
+                        return devices
+                    }, 1),
+                )),
+                mergeAll()
+            )),
+            tap(device => this.next(device))
+        ).subscribe()
+    }
+
+
+
+
+}

@@ -1,114 +1,132 @@
-import { BehaviorSubject, EMPTY, Subject, filter, finalize, map, merge, takeUntil, tap } from "rxjs";
-import { ConnectionStatusCode, Dps, TuyaConnection } from "./TuyaConnection.js";
+import { BehaviorSubject, EMPTY, ReplaySubject, Subject, filter, finalize, map, merge, mergeMap, skip, takeUntil, tap } from "rxjs";
+import { ConnectionStatusCode, RawDps, ReadableDps, TuyaLocal } from "./TuyaLocal.js";
 import { DeviceMetadata } from "./DeviceMetadata.js";
+import { TuyaCloud } from "./TuyaCloud.js";
 
-
-type LastCommandState = {
-    [key: string]: string | boolean | number
-}
 
 export class TuyaDevice {
 
-    #last_command_state: LastCommandState = {}
-    #last_dps: Dps = {}
-    public readonly $dps = new Subject<Dps>()
-    public readonly $status = new BehaviorSubject<ConnectionStatusCode>('created')
-    #stop = new BehaviorSubject(false)
 
-    #toReadableDps(dps: Dps) {
+    public readonly $dps = new BehaviorSubject<{ state: ReadableDps, last: ReadableDps, pending: ReadableDps }>({
+        last: {},
+        state: {},
+        pending: {}
+    })
+    public readonly $status = new BehaviorSubject<ConnectionStatusCode>('created')
+    #stop$ = new ReplaySubject(1)
+    #local?: TuyaLocal
+    #cloud?: TuyaCloud
+
+
+    #toReadableDps(dps: RawDps) {
         return Object.entries(dps).reduce(
             (p, [key, value]) => {
                 const mapped_key = this.config.mapping[`${key}`]?.code
                 if (!mapped_key) return p
-                return { ...p, [mapped_key]: value }
+                return { ...p, [`${mapped_key}`]: value }
             },
-            {} as Dps
+            {} as ReadableDps
         )
     }
 
-    #toRawDps(dps: Dps) {
+    #toRawDps(dps: ReadableDps) {
         return Object.entries(dps).reduce(
             (p, [key, value]) => {
                 const mapped_key = this.config.mapping[`${key}`]?.dp_id
                 if (!mapped_key) return p
-                return { ...p, [mapped_key]: value }
+                return { ...p, [Number(mapped_key)]: value }
             },
-            {} as Dps
+            {} as RawDps
         )
     }
 
 
+    constructor(public readonly config: DeviceMetadata) { }
 
-    constructor(
-        private connection: TuyaConnection,
-        public readonly config: DeviceMetadata
-    ) {
-        const [dps$, unregister] = connection.registerDps(config.uuid)
-        merge(
-
-            // Dps sync
-            dps$.pipe(
+    linkLocal(connection: TuyaLocal) {
+        this.#local = connection
+        return merge(
+            // Dps sync 
+            connection.registerDps(this.config.sub ? this.config.node_id : this.config.id).pipe(
                 map(dps => this.#toReadableDps(dps)),
                 tap(dps => {
                     if (Object.keys(dps).length > 0) {
                         this.$dps.next({
-                            ...dps,
-                            $status: this.$status.getValue()
+                            ... this.$dps.value,
+                            last: dps,
+                            state: {
+                                ... this.$dps.value.state,
+                                ...dps
+                            }
                         })
-                        this.#last_command_state = {}
                     }
                 }),
                 tap(() => this.$status.getValue() != 'online' && this.$status.next('online')),
             ),
 
-            //Status sync
-            connection.$status.pipe(
-                filter(status => status != 'online'),
-                tap(s => this.$status.next(s))
-            ),
-
-
             // Sync state with last command
-            this.$status.pipe(
+            connection.$status.pipe(
                 filter(status => status == 'online'),
-                filter(() => Object.keys(this.#last_command_state).length > 0),
-                tap(() => {
-                    const dps = { ...this.#last_command_state }
-                    this.#last_command_state = {}
-                    this.setDps(dps)
+                filter(() => Object.keys(this.$dps.value.pending).length > 0), 
+                mergeMap(async () => {
+                    const pending = this.$dps.value.pending
+                    this.$dps.next({
+                        ... this.$dps.value,
+                        last:{},
+                        pending:{}
+                    })
+                    await connection.setDps(
+                        this.#toRawDps(pending),
+                        this.config.sub ? this.config.node_id : undefined
+                    )
                 })
             ),
 
 
-            // Cache dps
-            this.$dps.pipe(
-                tap(dps => {
-                    this.#last_dps = {
-                        ... this.#last_dps,
-                        ...dps
-                    }
-                })
-            ),
+
+
 
 
             // Sync with sub report from connection
-            this.connection.$subDevReports.pipe(
-                filter(d => d.id == config.uuid),
+            connection.$subDevReports.pipe(
+                filter(d => d.id == this.config.node_id),
                 tap(dev => this.$status.next(dev.online ? 'online' : 'offline'))
             )
         ).pipe(
-            takeUntil(this.#stop.pipe(filter(Boolean))),
-            takeUntil(connection.stoppped$),
-            finalize(() => unregister())
+            takeUntil(this.#stop$),
+            takeUntil(connection.stop$),
+            finalize(() => {
+                this.#local = undefined
+                this.#recheck()
+            })
         ).subscribe()
-
-
-
     }
 
+    linkCloud(cloud: TuyaCloud) {
+        return merge(
 
-    get uniquee_device_id() {
-        return this.config.uuid || this.device_id
+            // Sync remote dps to local
+            cloud.watch(this.config.id).pipe(
+                tap(() => {
+                    // Sync dps
+                })
+            )
+
+        ).pipe(
+            finalize(() => {
+                this.#cloud = undefined
+                this.#recheck()
+            })
+        ).subscribe()
+    }
+
+    #recheck() {
+        const local = this.#local ? (this.#local.$status.getValue() == 'online') : false
+        const cloud = this.#cloud ? this.#cloud.online$.getValue() : false
+
+        if (!cloud && !local) {
+            this.$status.next('offline')
+        }
     }
 
     get mapping() {
@@ -132,41 +150,52 @@ export class TuyaDevice {
     }
 
 
-    setDps(raw_dps: Dps) {
-        if (Object.keys(raw_dps).length == 0) return
+    async setDps(dps: ReadableDps) {
+        if (Object.keys(dps).length == 0) return
+        if (Object.entries(dps).every(([code, v]) => v == this.$dps.value.state[code])) return
 
-        this.#last_command_state = {
-            ... this.#last_command_state,
-            ...raw_dps
+        if (this.#local) {
+            if (this.#local.$status.value == 'online') {
+                await this.#local.setDps(
+                    this.#toRawDps(dps),
+                    this.config.sub ? this.config.node_id : undefined
+                )
+            } else {
+                this.$dps.next({
+                    ... this.$dps.value,
+                    last: {},
+                    pending: {
+                        ... this.$dps.value.pending,
+                        ...dps
+                    }
+                })
+            }
+            return
         }
+        await this.#cloud?.sendCommand(this.config.id, this.#toReadableDps(dps))
 
-
-        return this.connection.setDps({
-            sub_device_id: this.config.uuid,
-            dps: this.#toRawDps(raw_dps)
-        })
-    }
-
-    getLastDps() {
-        return { ... this.#last_dps }
     }
 
     listenDps<T>(dp_code) {
         const mapping = this.config.mapping[dp_code]
         if (!mapping) return EMPTY
         return this.$dps.pipe(
+            map(v => v.last),
             map(dps => dps[mapping.code] as T),
             filter(v => v == undefined)
         )
     }
 
     async sync() {
-        await this.connection.sync(this.config.uuid)
+        await this.#local?.sync(this.config.node_id)
     }
 
     close() {
-        this.#stop.next(true)
+        this.#stop$.next(true)
     }
+
+
+
 
 
 }

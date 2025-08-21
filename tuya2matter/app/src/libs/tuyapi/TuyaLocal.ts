@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observable, Subject, debounceTime, exhaustMap, filter, finalize, firstValueFrom, fromEvent, interval, map, merge, mergeAll, mergeMap, of, switchMap, take, takeUntil, tap, timer } from 'rxjs'
+import { BehaviorSubject, Observable, ReplaySubject, Subject, debounceTime, exhaustMap, filter, finalize, firstValueFrom, fromEvent, interval, map, merge, mergeAll, mergeMap, of, switchMap, take, takeUntil, tap, timer } from 'rxjs'
 import { CommandType, MessageParser } from './message-parser.js'
 import dgram from 'dgram'
 import { createHash } from 'crypto'
@@ -27,14 +27,26 @@ export type DeviceID = string
 export type ConnectionStatusCode = 'created' | 'connecting' | 'online' | 'offline'
 export type ConnectionStatus = BehaviorSubject<ConnectionStatusCode>
 
-export type Dps = {
+export type RawDps = Partial<{
     [key: string]: string | number | boolean
-}
+}>
+
+export type ReadableDps = Partial<{
+    doorcontact_state: boolean
+    battery_percentage: number
+    percent_control: number
+    percent_state: number
+    presence_state: string
+    control: string
+    [key: number]: string | number | boolean
+}>
+
+
 
 export type DpsUpdate = {
     devId: string
     cid: string
-    dps: Dps,
+    dps: RawDps,
     t: number
 }
 
@@ -56,7 +68,7 @@ export type CmdResponse = {
     sequenceN: number
 }
 
-export class TuyaConnection {
+export class TuyaLocal {
 
 
     static watch() {
@@ -93,10 +105,8 @@ export class TuyaConnection {
         )
     }
 
-    #devices = new Map<string, BehaviorSubject<Dps>>()
-
+    #devices = new Map<string, BehaviorSubject<RawDps> & { n: number }>()
     #$response = new Subject<CmdResponse>()
-
     #$request = new Subject<{
         payload: any,
         onSuccess?: (seq: number) => void
@@ -109,7 +119,7 @@ export class TuyaConnection {
     }>
 
     #$metadata = new BehaviorSubject<DiscoverPayload | undefined>(undefined)
-    #stop = new BehaviorSubject(false)
+    public readonly stop$ = new ReplaySubject(1)
 
 
     #DEBUG = false
@@ -121,11 +131,11 @@ export class TuyaConnection {
             process.env.TUYA2MQTT_DEBUG == 'all'
             || process.env.TUYA2MQTT_DEBUG?.includes(this.config.id)
             || (
-                this.config.uuid && process.env.TUYA2MQTT_DEBUG?.includes(this.config.uuid)
+                this.config.node_id && process.env.TUYA2MQTT_DEBUG?.includes(this.config.node_id)
             )
         )
         this.#$metadata.pipe(
-            takeUntil(this.stoppped$),
+            takeUntil(this.stop$),
             filter(Boolean),
             exhaustMap($ => this.#connect($))
         ).subscribe()
@@ -157,17 +167,19 @@ export class TuyaConnection {
 
             // Map response
             fromEvent(socket, 'data').pipe(
-                tap(() => this.$status.getValue() != 'online' && this.$status.next('online')),
                 map(data => parser.parse(data) as Array<CmdResponse>),
                 mergeAll(),
                 tap(data => {
                     seq = Math.max(data.sequenceN, seq)
-                    const p = data.payload as { dps: Dps, cid: string }
+                    const p = data.payload as { dps: RawDps, cid: string }
                     if (p.dps || p.cid) {
                         const id = p.cid || this.config.id
                         const $dps = this.#devices.get(id)
                         if ($dps) {
-                            if (Object.keys(p.dps).some(key => p.dps[key] != $dps.getValue()[key])) {
+                            if (Object.keys(p.dps).some(key => (
+                                ["single_click", "double_click", "long_press"].includes(p.dps[key] as string)
+                                || p.dps[key] != $dps.getValue()[key]
+                            ))) {
                                 $dps.next(p.dps || {})
                             }
                         }
@@ -198,12 +210,6 @@ export class TuyaConnection {
                     })
                     return onSuccess?.(error ? -1 : sequenceN)
                 }, 1)
-            ),
-
-
-            // interval ping
-            interval(5000).pipe(
-                tap(() => this.cids ? this.sync() : this.refresh())
             )
         ).pipe(
             finalize(() => socket.end())
@@ -211,7 +217,7 @@ export class TuyaConnection {
 
 
 
-        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}]  <${this.config.id}> ${this.config.name}  Syncing [protocol ${version}]`)
+        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  Syncing [protocol ${version}]`)
         const decrypted = version == '3.4' ? await this.#setup34Protocol(parser) : true
         if (!decrypted) {
             console.error(`[${new Date().toLocaleString()}] [${ip}] <${this.config.id}> Can not setup 3.4 protocol`)
@@ -219,12 +225,18 @@ export class TuyaConnection {
             return
         }
 
+
         return {
             timeout$: firstValueFrom(merge(
 
+                interval(3000).pipe(
+                    tap(() => this.cids ? this.sync() : this.refresh()),
+                    filter(() => false)
+                ),
+
                 // Timeout
                 fromEvent<Buffer>(socket, 'data').pipe(
-                    debounceTime(10000),
+                    debounceTime(5000),
                     finalize(() => connection.unsubscribe()),
                     map(() => 'TIMEOUT' as 'TIMEOUT')
                 ),
@@ -234,7 +246,7 @@ export class TuyaConnection {
                 fromEvent(socket, 'error'),
 
                 // Stop
-                this.#stop.pipe(filter(Boolean))
+                this.stop$
             ))
         }
 
@@ -248,6 +260,7 @@ export class TuyaConnection {
         const connection = await this.#tcp($)
         if (connection) {
             this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${$.ip}] <${this.config.id}>  ${this.config.name}: ONLINE [protocol ${$.version}]`)
+            this.$status.getValue() != 'online' && this.$status.next('online')
             await connection.timeout$
             this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${$.ip}] <${this.config.id}>  ${this.config.name}: OFFLINE`)
         } else {
@@ -260,9 +273,6 @@ export class TuyaConnection {
         this.#$metadata.next({ ...info, version: `${info.version}` })
     }
 
-    get stoppped$() {
-        return this.#stop.pipe(filter(Boolean))
-    }
 
     async #setup34Protocol(parser: MessageParser) {
 
@@ -364,7 +374,7 @@ export class TuyaConnection {
         })
     }
 
-    async setDps(data: { dps: Dps, sub_device_id?: string }) {
+    async setDps(dps: RawDps, sub_device_id?: string) {
         const broadcast_metadata = this.#$metadata.getValue()
         if (!broadcast_metadata) return
         const { version } = broadcast_metadata
@@ -377,13 +387,13 @@ export class TuyaConnection {
             data: {
                 data: {
                     ctype: 0,
-                    ...data.sub_device_id ? {
-                        dps: data.dps,
-                        cid: data.sub_device_id
+                    ...sub_device_id ? {
+                        dps,
+                        cid: sub_device_id
                     } : {
                         gwId: this.config.id,
                         devId: this.config.id,
-                        dps: data.dps,
+                        dps,
                         uid: this.config.id,
                     }
                 },
@@ -397,13 +407,13 @@ export class TuyaConnection {
             commandByte: CommandType.CONTROL,
             data: {
                 t,
-                ...data.sub_device_id ? {
-                    dps: data.dps,
-                    cid: data.sub_device_id
+                ...sub_device_id ? {
+                    dps,
+                    cid: sub_device_id
                 } : {
                     gwId: this.config.id,
                     devId: this.config.id,
-                    dps: data.dps,
+                    dps,
                     uid: this.config.id,
                 }
             }
@@ -443,17 +453,20 @@ export class TuyaConnection {
         }
     }
 
-    registerDps(device_id: string = this.config.id) {
-        const $dps = this.#devices.get(device_id) || new BehaviorSubject<Dps>({})
-        !this.#devices.has(device_id) && this.#devices.set(device_id, $dps)
-        return [
-            $dps,
-            () => this.#devices.delete(device_id)
-        ] as [Observable<Dps>, Function]
+    registerDps(id: string) {
+        const $dps = this.#devices.get(id) || Object.assign(new BehaviorSubject<RawDps>({}), { n: 0 })
+        $dps.n++
+        !this.#devices.has(id) && this.#devices.set(id, $dps)
+        return $dps.pipe(
+            finalize(() => {
+                $dps.n--
+                $dps.n == 0 && this.#devices.delete(id)
+            })
+        )
     }
 
     close() {
-        this.#stop.next(true)
+        this.stop$.next(true)
     }
 
 }

@@ -3,7 +3,7 @@ import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint } from "@matter/main";
 import { GenericSwitchDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer, SwitchServer, BasicInformationServer } from "@matter/main/behaviors";
-import { EMPTY, mergeMap } from "rxjs";
+import { EMPTY, filter, from, lastValueFrom, map, mergeMap, skip } from "rxjs";
 import { PowerSourceBaseServer, } from "@matter/main/behaviors/power-source";
 import { } from "@matter/main/behaviors/switch";
 
@@ -26,7 +26,7 @@ export class Tuya2MatterButton {
                 productName: name,
                 productLabel: name,
                 serialNumber: this.tuya.config.uuid,
-                reachable: true,
+                reachable: false,
             },
             powerSource: {
                 status: 1,
@@ -49,14 +49,17 @@ export class Tuya2MatterButton {
             },
             parts: [1, 2, 3, 4].map(n => {
                 return {
-                    id: `code${n}`,
+                    id: `switch${n}_value`,
                     type: GenericSwitchDevice.with(SwitchServer.with("MomentarySwitchMultiPress", "MomentarySwitchRelease", "MomentarySwitch"))
 
                 }
             })
         })
 
+
         const observable = this.tuya.$dps.pipe(
+            skip(2),
+            map(d => d.last),
             mergeMap(async dps => {
                 const percent = dps.battery_percentage
                 percent != undefined && endpoint.set({
@@ -65,33 +68,66 @@ export class Tuya2MatterButton {
                         batPercentRemaining: Number(percent)
                     }
                 })
-                // console.log(dps)
-                // if (dps.switch1_value) {
-                //     endpoint.set({
-                //         switch: {
-                //             currentPosition: 1,
-                //             rawPosition: 1
-                //         }
-                //     })
 
-                //     await Bun.sleep(100)
+                await lastValueFrom(from(Object.entries(dps)).pipe(
+                    filter(([name, value]) => ["single_click", "double_click", "long_press"].includes(`${value}`)),
+                    mergeMap(async ([code, type]) => {
+                        const target = endpoint.parts.get(code) as Endpoint<any>
+                        if (!target) return
 
-                //     endpoint.set({
-                //         switch: {
-                //             currentPosition: 0,
-                //             rawPosition: 0
-                //         }
-                //     })
-                // }
+                        target.set({
+                            switch: {
+                                currentPosition: 1,
+                                rawPosition: 1
+                            }
+                        })
+                        await Bun.sleep(100)
 
+                        if (type != 'single_click') {
+                            if (type == 'double_click') {
+                                await Bun.sleep(100)
+                                target.set({
+                                    switch: {
+                                        currentPosition: 0,
+                                        rawPosition: 0
+                                    }
+                                } as any)
+                                await Bun.sleep(100)
+                                target.set({
+                                    switch: {
+                                        currentPosition: 1,
+                                        rawPosition: 1
+                                    }
+                                })
+                                await Bun.sleep(100)
+                                target.set({
+                                    switch: {
+                                        currentPosition: 0,
+                                        rawPosition: 0
+                                    }
+                                })
+                            } else {
+                                await Bun.sleep(4000)
+                            }
+                        }
 
-
+                        target.set({
+                            switch: {
+                                currentPosition: 0,
+                                rawPosition: 0
+                            }
+                        })
+                    })
+                ), { defaultValue: [] })
             })
         )
 
 
 
-        return { endpoint, observable }
+        return {
+            endpoints: [endpoint],
+            observable
+        }
 
 
     }

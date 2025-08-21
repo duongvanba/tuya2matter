@@ -20,5 +20,6 @@ export type DeviceMetadata = {
     online: boolean
     home_id: string
     gateway_id?: string
+    node_id: string
     is_gateway: boolean
 }

@@ -3,7 +3,7 @@ import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint } from "@matter/main";
 import { OccupancySensorDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer, OccupancySensingBehavior } from "@matter/main/behaviors";
-import { mergeMap } from "rxjs";
+import { map, mergeMap } from "rxjs";
 
 export class Tuya2MatterOccupancySensor {
     constructor(
@@ -23,7 +23,7 @@ export class Tuya2MatterOccupancySensor {
                 productName: name,
                 productLabel: name,
                   serialNumber: this.tuya.config.uuid,
-                reachable: true,
+                reachable: false,
             },
             occupancySensing: {
                 occupancySensorType: 0x03,
@@ -34,6 +34,7 @@ export class Tuya2MatterOccupancySensor {
         })
 
         const observable = this.tuya.$dps.pipe(
+            map(d => d.last),
             mergeMap(async dps => {
                 const presence_state = dps.presence_state
                 presence_state != undefined && endpoint.set({
@@ -44,13 +45,10 @@ export class Tuya2MatterOccupancySensor {
             })
         ) 
 
-        return { endpoint, observable }
-
-
-
-
-
-
+          return {
+            endpoints: [endpoint],
+            observable
+        }
 
 
     }

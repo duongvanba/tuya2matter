@@ -4,7 +4,7 @@ import { Endpoint } from "@matter/main";
 import { ContactSensorDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer } from "@matter/main/behaviors";
 import { PowerSourceBaseServer } from "@matter/main/behaviors/power-source";
-import { mergeMap } from "rxjs";
+import { map, mergeMap } from "rxjs";
 
 
 
@@ -26,7 +26,7 @@ export class Tuya2MatterBinarySensor {
                 productName: name,
                 productLabel: name,
                 serialNumber: this.tuya.config.uuid,
-                reachable: true,
+                reachable: false,
             },
             booleanState: { stateValue: true },
             powerSource: {
@@ -53,6 +53,7 @@ export class Tuya2MatterBinarySensor {
 
 
         const observable = this.tuya.$dps.pipe(
+            map(d => d.last),
             mergeMap(async dps => {
                 const onoff = dps.doorcontact_state
                 const percent = dps.battery_percentage
@@ -72,7 +73,10 @@ export class Tuya2MatterBinarySensor {
             })
         ) 
 
-        return { endpoint, observable }
+         return {
+            endpoints: [endpoint],
+            observable
+        }
 
 
     }

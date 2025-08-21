@@ -1,18 +1,17 @@
 import { Module } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core"; 
-import { CloudSync } from "./services/CloudSync.js";
+import { CloudConfig } from "./services/CloudConfig.js";
+import { TuyaDeviceService } from "./services/TuyaDeviceService.js";
 import { SyncService } from "./services/Sync.js";
 import { MatterService } from "./services/Matter.js";
-import { LocalService } from "./services/Local.js";
 
-console.log(`VERSION 1.0.6`)
 
 @Module({
     providers: [
-        CloudSync,
+        CloudConfig,
         SyncService,
         MatterService,
-        LocalService
+        TuyaDeviceService
     ]
 })
 export class AppMoule { }
