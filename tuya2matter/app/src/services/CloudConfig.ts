@@ -35,7 +35,7 @@ export class CloudConfig extends BehaviorSubject<false | { api: TuyaCloud, confi
             return new TuyaCloud(config)
         }
         const { next, qrcode } = await TuyaCloud.login(process.env.USER_CODE!)
-        console.log(`Scan qr code bellow: `)
+        console.log(`Use Tuya app to scan this bellow qr code:\n\n`)
         QrCode.generate(qrcode )
         const hass = await next()
         if (!hass) {
