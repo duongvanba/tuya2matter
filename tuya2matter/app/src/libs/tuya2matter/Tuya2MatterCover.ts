@@ -63,6 +63,8 @@ export class Tuya2MatterCover {
                 reachable: false,
             }
         })
+ 
+        
 
         const observable = this.tuya.$dps.pipe(
             map(d => d.last),

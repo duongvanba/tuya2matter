@@ -36,7 +36,8 @@ export class CloudConfig extends BehaviorSubject<false | { api: TuyaCloud, confi
         }
         const { next, qrcode } = await TuyaCloud.login(process.env.USER_CODE!)
         console.log(`Use Tuya app to scan this bellow qr code:\n\n`)
-        QrCode.generate(qrcode )
+        console.log(`QRcode URL: https://api.qrserver.com/v1/create-qr-code/?size=450x450&data=${encodeURIComponent(qrcode)}`)
+        QrCode.generate(qrcode)
         const hass = await next()
         if (!hass) {
             console.error({ error: 'CAN_NOT_LOGIN' })

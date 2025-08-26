@@ -61,6 +61,7 @@ export class MatterService {
         if (!server.state.commissioning.commissioned) {
             const { qrPairingCode } = server.state.commissioning.pairingCodes;
             console.log(`\nMatter QRCODE: \n`)
+            console.log(`QRcode URL: https://api.qrserver.com/v1/create-qr-code/?size=450x450&data=${encodeURIComponent(qrPairingCode)}`)
             QR.generate(qrPairingCode)
             console.log('\n\n')
         }
