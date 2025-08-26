@@ -65,7 +65,5 @@ export class MatterService {
             QR.generate(qrPairingCode)
             console.log('\n\n')
         }
-
-
     }
 }

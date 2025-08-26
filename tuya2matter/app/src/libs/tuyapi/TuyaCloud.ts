@@ -1,7 +1,7 @@
 
 import got from 'got';
 import * as crypto from "crypto";
-import { BehaviorSubject, finalize, firstValueFrom, from, interval, mergeMap, reduce, ReplaySubject, Subject, toArray } from 'rxjs';
+import { BehaviorSubject, filter, finalize, firstValueFrom, from, interval, mergeMap, reduce, ReplaySubject, startWith, Subject, takeUntil, toArray } from 'rxjs';
 import { DeviceMetadata } from './DeviceMetadata.js';
 import { Observable } from 'rxjs';
 import { ReadableDps } from './TuyaLocal.js';
@@ -44,12 +44,12 @@ export type TuyaDeviceHomeMap = {
 
 export class TuyaCloud {
 
-    public readonly credential = new Subject<TuyaCredential>
+    public readonly credential = new ReplaySubject<TuyaCredential>(1)
     public online$ = new BehaviorSubject(false)
     public readonly $stop = new ReplaySubject<void>(1)
 
 
-    static async getCredential(usercode: string) {
+    static async #getCredential(usercode: string) {
         const client = got.extend({
             prefixUrl: 'https://apigw.iotbing.com/v1.0/m/life/home-assistant',
             throwHttpErrors: false
@@ -92,7 +92,7 @@ export class TuyaCloud {
     }
 
     static async login(usercode: string) {
-        const task = await this.getCredential(usercode)
+        const task = await this.#getCredential(usercode)
         const next = async () => {
             const credential = await task.next()
             return credential ? new this(credential) : null
@@ -104,11 +104,11 @@ export class TuyaCloud {
         }
     }
 
-    constructor(public readonly config: TuyaCredential) {
-        from(this.refresh()).pipe(
-            mergeMap(() => interval(7100 * 1000)),
-            mergeMap(() => this.refresh()),
-            finalize(() => this.$stop.next())
+    constructor(config: TuyaCredential) {
+        this.credential.next(config)
+        interval(100 * 60000).pipe(
+            takeUntil(this.$stop),
+            mergeMap(() => this.refresh())
         ).subscribe()
     }
 
@@ -180,10 +180,11 @@ export class TuyaCloud {
         params?: Dict,
         body?: Dict
     }) {
+        const credential = await firstValueFrom(this.credential)
         const rid = crypto.randomUUID();
         const md5 = crypto.createHash("md5");
         // @ts-ignore
-        md5.update(Buffer.from(rid + this.config.refresh_token, "utf8"));
+        md5.update(Buffer.from(rid + credential.refresh_token, "utf8"));
         const hash_key = md5.digest("hex");
         // @ts-ignore
         const hmac = crypto.createHmac("sha256", Buffer.from(rid, "utf8"));
@@ -199,10 +200,10 @@ export class TuyaCloud {
             "X-requestId": rid,
             "X-sid": "",
             "X-time": String(t),
-            "X-token": this.config.access_token
+            "X-token": credential.access_token
         };
         headers["X-sign"] = this.#restfulSign(hash_key, searchParams$, json$, headers);
-        const url = this.config.endpoint + path;
+        const url = credential.endpoint + path;
         const response = await got(url, {
             method,
             searchParams: searchParams$ ? { encdata: searchParams$ } : {},
@@ -223,21 +224,26 @@ export class TuyaCloud {
     async refresh() {
         if (this.#refreshing) return true
         this.#refreshing = true;
+        const credential = await firstValueFrom(this.credential)
         try {
             const res = await this.request<{
                 accessToken: string
                 refreshToken: string
-            }>({ path: `/v1.0/m/token/${this.config.refresh_token}` });
+            }>({ path: `/v1.0/m/token/${credential.refresh_token}` });
             if (res.data) {
-                this.config.access_token = res.data.accessToken
-                this.config.refresh_token = res.data.refreshToken
+                this.credential.next({
+                    ...credential,
+                    access_token: res.data.accessToken,
+                    refresh_token: res.data.refreshToken
+                })
+                return true
             }
-            this.credential.next({ ...this.config })
         } catch (e: any) {
             // giữ nguyên phong cách log ngắn gọn
             console.error("network error on refresh =", e?.message ?? e);
         }
         this.#refreshing = false;
+        return false
     }
 
 
