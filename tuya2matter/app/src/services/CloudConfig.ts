@@ -19,7 +19,7 @@ export class CloudConfig extends BehaviorSubject<false | { api: TuyaCloud, confi
         api.credential.subscribe(config => {
             Bun.file(this.#CREDENTIAL_PATH).write(JSON.stringify(config, null, 2))
         })
-        if (existsSync(this.#DEVICES_PATH)) {
+        if (existsSync(this.#DEVICES_PATH) && process.env.DEV) {
             const config = await Bun.file(this.#DEVICES_PATH).json() as TuyaDeviceHomeMap
             this.next({ api, config })
         } else {
