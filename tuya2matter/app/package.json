@@ -1,6 +1,6 @@
 {
   "name": "tuya2matter",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "dependencies": {
     "@matter/main": "^0.15.3",
     "@nestjs/common": "^11.1.6",

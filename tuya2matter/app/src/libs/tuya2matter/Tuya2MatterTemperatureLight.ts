@@ -24,13 +24,8 @@ export class Tuya2MatterTemperatureLight {
             ColorTemperatureLightDevice
                 .with(BridgedDeviceBasicInformationServer)
                 .with(class extends LevelControlServer {
-                    override   moveToLevelWithOnOff({ level }: LevelControl.MoveToLevelRequest): MaybePromise {
+                    override moveToLevelWithOnOff({ level }: LevelControl.MoveToLevelRequest): MaybePromise {
                         const bright_value = Math.max((level - 4) * 4, 1)
-                        console.log({
-                            type: 'level_cmd',
-                            cmd: level,
-                            dps: bright_value
-                        })
                         tuya.setDps({ bright_value })
                     }
                 })
@@ -71,17 +66,17 @@ export class Tuya2MatterTemperatureLight {
                 const bright_value = dps.bright_value
                 const onOff = dps.switch_led
                 const value = {
-                    ...temp_value != undefined ? { colorControl: { colorTemperatureMireds: Math.round(153 + 217 * temp_value / 1000) } } : {},
+                    ...temp_value != undefined ? { colorControl: { colorTemperatureMireds: Math.round(370 - 217 * temp_value / 1000) } } : {},
                     ...bright_value != undefined ? { levelControl: { currentLevel: Math.round(250 * bright_value / 1000 + 4) } } : {},
                     ...onOff != undefined ? { onOff: { onOff } } : {}
-                } 
+                }
                 endpoint.set(value)
 
             })
         )
 
         endpoint.events.colorControl.colorTemperatureMireds$Changed.on((e, o, { offline }) => {
-            const temp_value = Math.round( (e - 153) / 217 * 1000) 
+            const temp_value = Math.round((e - 153) / 217 * 1000)
             if (offline) return
             tuya.setDps({ temp_value })
         })
