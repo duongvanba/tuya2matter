@@ -76,7 +76,7 @@ export class Tuya2MatterTemperatureLight {
         )
 
         endpoint.events.colorControl.colorTemperatureMireds$Changed.on((e, o, { offline }) => {
-            const temp_value = Math.round((e - 153) / 217 * 1000)
+            const temp_value = Math.round((370 - e) / 217 * 1000)
             if (offline) return
             tuya.setDps({ temp_value })
         })
