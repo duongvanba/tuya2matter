@@ -67,15 +67,19 @@ export class Tuya2MatterFan {
                 const { switch: on, fan_speed_percent, light } = dps
                 if (on) {
                     const speedCurrent = Number(fan_speed_percent)
-                    const fanMode = Math.round(speedCurrent / 5 * 3)
-                    const percentCurrent = Math.round(speedCurrent / 5 * 100)
-                    endpoint.set({
-                        fanControl: {
-                            fanMode,
-                            percentCurrent,
-                            speedCurrent
-                        }
-                    })
+                    if (!isNaN(speedCurrent)) {
+                        const fanMode = Math.round(speedCurrent / 5 * 3)
+                        const percentCurrent = Math.round(speedCurrent / 5 * 100)
+                        console.log({ dps, fan_speed_percent, speedCurrent, fanMode, percentCurrent })
+                        endpoint.set({
+                            fanControl: {
+                                fanMode,
+                                percentCurrent,
+                                speedCurrent
+                            }
+                        })
+                    }
+
                 } else {
                     endpoint.set({
                         fanControl: {
