@@ -7,7 +7,6 @@ export type DeviceMetadata = {
     category: string
     uuid: string
     name: string
-    mac: string
     sub: boolean,
     product_name: string
     mapping: {
@@ -20,6 +19,6 @@ export type DeviceMetadata = {
     online: boolean
     home_id: string
     gateway_id?: string
-    node_id: string
     is_gateway: boolean
+    node_id: string
 }

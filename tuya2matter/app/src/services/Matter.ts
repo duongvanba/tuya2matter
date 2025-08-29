@@ -8,7 +8,7 @@ const storageService = Environment.default.get(StorageService)
 
 
 storageService.location = existsSync('/data') ? '/data/matter' : './.matter'
-Logger.level = 'warn'
+// Logger.level = 'warn'
 
 @Injectable()
 export class MatterService {

@@ -125,7 +125,7 @@ export class TuyaLocal {
         online: boolean
     }>
 
-    #$metadata = new BehaviorSubject<DiscoverPayload | undefined>(undefined)
+    #$metadata = new BehaviorSubject<Pick<DiscoverPayload, 'ip' | 'version'> | undefined>(undefined)
     public readonly stop$ = new ReplaySubject(1)
 
 
@@ -137,9 +137,6 @@ export class TuyaLocal {
         this.#DEBUG = !!(
             process.env.TUYA2MQTT_DEBUG == 'all'
             || process.env.TUYA2MQTT_DEBUG?.includes(this.config.id)
-            || (
-                this.config.node_id && process.env.TUYA2MQTT_DEBUG?.includes(this.config.node_id)
-            )
         )
         this.#$metadata.pipe(
             takeUntil(this.stop$),
@@ -148,7 +145,7 @@ export class TuyaLocal {
         ).subscribe()
     }
 
-    async #tcp({ ip, version }: DiscoverPayload) {
+    async #tcp({ ip, version }: Pick<DiscoverPayload, 'ip' | 'version'>) {
 
         const socket = await firstValueFrom(
             of(connect({
@@ -163,6 +160,7 @@ export class TuyaLocal {
                 ))
             ))
         if (!socket) return
+        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  Connected to ${this.config.name} `)
 
         const parser = new MessageParser({
             key: this.config.local_key,
@@ -180,6 +178,7 @@ export class TuyaLocal {
                     seq = Math.max(data.sequenceN, seq)
                     const p = data.payload as { dps: RawDps, cid: string }
                     if (p.dps || p.cid) {
+                        this.$status.getValue() != 'online' && this.$status.next('online')
                         const id = p.cid || this.config.id
                         const $dps = this.#devices.get(id)
                         if ($dps) {
@@ -210,7 +209,9 @@ export class TuyaLocal {
                         ...payload,
                         sequenceN
                     })
-                    if (!socket.writable) return onSuccess?.(-1)
+                    if (!socket.writable) {
+                        return onSuccess?.(-1)
+                    }
                     const error = await new Promise(s => {
                         // @ts-ignore
                         socket.write(buffer, s)
@@ -232,7 +233,9 @@ export class TuyaLocal {
             return
         }
 
+        await this.refresh()
 
+        this.$status.next('online')
         return {
             timeout$: firstValueFrom(merge(
 
@@ -259,24 +262,23 @@ export class TuyaLocal {
 
     }
 
-    async #connect($: DiscoverPayload) {
+    async #connect($: Pick<DiscoverPayload, 'ip' | 'version'>) {
 
         if (this.$status.getValue() == 'online' || this.$status.getValue() == 'connecting') return
         this.$status.next('connecting')
         this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${$.ip}] <${this.config.id}>  ${this.config.name}:  Connecting to ${this.config.name} - ip ${$.ip} `)
         const connection = await this.#tcp($)
         if (connection) {
-            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${$.ip}] <${this.config.id}>  ${this.config.name}: ONLINE [protocol ${$.version}]`)
-            this.$status.getValue() != 'online' && this.$status.next('online')
+            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${$.ip}] <${this.config.id}>  ${this.config.name}:  ONLINE [protocol ${$.version}]`)
             await connection.timeout$
-            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${$.ip}] <${this.config.id}>  ${this.config.name}: OFFLINE`)
+            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${$.ip}] <${this.config.id}>  ${this.config.name}:  OFFLINE`)
         } else {
-            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${$.ip}] <${this.config.id}>  ${this.config.name}: Can not connect to ${this.config.name} - ip ${$.ip} `)
+            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${$.ip}] <${this.config.id}>  ${this.config.name}:  Can not connect to ${this.config.name} - ip ${$.ip} `)
         }
         this.$status.next('offline')
     }
 
-    connect(info: DiscoverPayload) {
+    connect(info: Pick<DiscoverPayload, 'ip' | 'version'>) {
         this.#$metadata.next({ ...info, version: `${info.version}` })
     }
 
@@ -346,14 +348,14 @@ export class TuyaLocal {
         )
     }
 
-    async refresh() {
+    refresh() {
         const broadcast_metadata = this.#$metadata.getValue()
         if (!broadcast_metadata) return
         const { version } = broadcast_metadata
         const t = Math.round(new Date().getTime() / 1000).toString()
         const ids = [4, 5, 6, 18, 19, 20]
 
-        if (version == '3.4' || version == '3.5') return await this.cmd({
+        if (version == '3.4' || version == '3.5') return this.cmd({
             commandByte: CommandType.DP_REFRESH,
             data: {
                 data: {
@@ -369,7 +371,7 @@ export class TuyaLocal {
             encrypted: true
         })
 
-        return await this.cmd({
+        return this.cmd({
             commandByte: CommandType.DP_REFRESH,
             data: {
                 gwId: this.config.id,

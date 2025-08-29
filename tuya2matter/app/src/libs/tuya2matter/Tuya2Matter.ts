@@ -8,6 +8,7 @@ import { Tuya2MatterBinarySensor } from "./Tuya2MatterBinarySensor.js";
 import { Tuya2MatterButton } from "./Tuya2MatterButton.js";
 import { BehaviorSubject, filter, from, merge, of, skip, switchMap, takeUntil, tap } from "rxjs";
 import { Tuya2MatterTemperatureLight } from "./Tuya2MatterTemperatureLight.js";
+import { Tuya2MatterFan } from "./Tuya2MatterFan.js";
 
 
 
@@ -27,6 +28,7 @@ export class Tuya2Matter {
         if (this.tuya.category == 'mcs') return new Tuya2MatterBinarySensor(this.aggregator, this.tuya)
         if (this.tuya.category == 'wxkg') return new Tuya2MatterButton(this.aggregator, this.tuya)
         if (this.tuya.category == 'dd') return new Tuya2MatterTemperatureLight(this.aggregator, this.tuya)
+        if (this.tuya.category == 'fs') return new Tuya2MatterFan(this.aggregator, this.tuya)
     }
 
     async init() {
