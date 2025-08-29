@@ -8,7 +8,7 @@ const storageService = Environment.default.get(StorageService)
 
 
 storageService.location = existsSync('/data') ? '/data/matter' : './.matter'
-// Logger.level = 'warn'
+Logger.level = 'warn'
 
 @Injectable()
 export class MatterService {
@@ -60,7 +60,7 @@ export class MatterService {
         await server.start()
         if (!server.state.commissioning.commissioned) {
             const { qrPairingCode } = server.state.commissioning.pairingCodes;
-            console.log(`\nMatter QRCODE: \n`)
+            console.log(`\nMatter QRCODE: ${qrPairingCode}\n`)
             console.log(`QRcode URL: https://api.qrserver.com/v1/create-qr-code/?size=450x450&data=${encodeURIComponent(qrPairingCode)}`)
             QR.generate(qrPairingCode)
             console.log('\n\n')
