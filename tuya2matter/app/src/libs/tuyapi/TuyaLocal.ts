@@ -42,7 +42,7 @@ export type ReadableDps = Partial<{
     bright_value: number
     temp_value: number
     switch: boolean
-    fan_speed_percent: string
+    fan_speed_percent: string | number
     light: boolean
     illuminance_value: number
     [key: number]: string | number | boolean

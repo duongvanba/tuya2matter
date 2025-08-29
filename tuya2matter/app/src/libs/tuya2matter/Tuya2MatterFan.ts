@@ -23,27 +23,7 @@ export class Tuya2MatterFan {
         const endpoint = new Endpoint(
             FanDevice.with(
                 BridgedDeviceBasicInformationServer,
-                class extends OnOffServer {
-                    override on() {
-                        tuya.setDps({ switch: true })
-                    }
-
-                    override off() {
-                        tuya.setDps({ switch: false })
-                    }
-                },
-                class extends FanControlServer {
-                    override initialize() {
-                        this.reactTo(this.events.percentSetting$Changed, (v, o, { offline }) => {
-                            if (offline) return
-                            const percent = Math.ceil(Number(v) / 20)
-                            tuya.setDps({
-                                switch: v == 0 ? false : true,
-                                fan_speed_percent: v == 0 ? '0' : `${percent}`
-                            })
-                        })
-                    }
-                },
+                class extends FanControlServer.with('MultiSpeed') { }
             ),
             {
                 id: this.tuya.id,
@@ -58,7 +38,10 @@ export class Tuya2MatterFan {
                     fanMode: 0,
                     fanModeSequence: 0,
                     percentCurrent: 0,
-                    percentSetting: 0
+                    percentSetting: 0,
+                    speedCurrent: 0,
+                    speedMax: 5,
+                    speedSetting: 0
                 },
                 parts: !this.tuya.mapping.light ? [] : [
                     {
@@ -81,12 +64,30 @@ export class Tuya2MatterFan {
         const observable = this.tuya.$dps.pipe(
             map(d => d.last),
             mergeMap(async dps => {
-                const { switch: _, fan_speed_percent, light } = dps
+                const { switch: on, fan_speed_percent, light } = dps
+                if (on) {
+                    const speedCurrent = Number(fan_speed_percent)
+                    const fanMode = Math.round(speedCurrent / 5 * 3)
+                    const percentCurrent = Math.round(speedCurrent / 5 * 100)
+                    endpoint.set({
+                        fanControl: {
+                            fanMode,
+                            percentCurrent,
+                            speedCurrent
+                        }
+                    })
+                } else {
+                    endpoint.set({
+                        fanControl: {
+                            fanMode: 0,
+                            percentCurrent: 0,
+                            speedCurrent: 0
+                        }
+                    })
+                }
                 const fanControl = {
-                    ..._ != undefined ? { fanMode: Math.round(3 * Number(_) / 5) } : {},
                     ...fan_speed_percent != undefined ? { percentCurrent: Math.round(Number(fan_speed_percent) / 5 * 100) } : {}
                 }
-                console.log({ dps, sync: fanControl })
                 endpoint.set({ fanControl })
                 if (light != undefined) {
                     const l = endpoint.parts.get('light') as Endpoint<OnOffLightDevice>
@@ -98,12 +99,21 @@ export class Tuya2MatterFan {
             })
         )
 
-        endpoint.events.fanControl.fanMode$Changed.on(fanMode => {
-            console.log({ fanMode })
+        endpoint.events.fanControl.fanMode$Changed.on((fanMode, _, { offline }) => {
+            if (offline) return
             fanMode == 0 && tuya.setDps({ switch: false })
-            fanMode == 1 && tuya.setDps({ switch: true, fan_speed_percent: '1' })
-            fanMode == 2 && tuya.setDps({ switch: true, fan_speed_percent: '3' })
-            fanMode == 3 && tuya.setDps({ switch: true, fan_speed_percent: '5' })
+            fanMode == 1 && tuya.setDps({ switch: true, fan_speed_percent: 1 })
+            fanMode == 2 && tuya.setDps({ switch: true, fan_speed_percent: 3 })
+            fanMode == 3 && tuya.setDps({ switch: true, fan_speed_percent: 5 })
+        })
+
+        endpoint.events.fanControl.percentCurrent$Changed.on((percent, _, { offline }) => {
+            if (offline) return
+            const fan_speed_percent = Math.ceil(Number(percent) / 20)
+            tuya.setDps({
+                switch: percent == 0 ? false : true,
+                fan_speed_percent
+            })
         })
 
 
