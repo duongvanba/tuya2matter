@@ -3,7 +3,8 @@ import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
 import { Endpoint } from "@matter/main";
 import { FanDevice, OnOffLightDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer, FanControlServer, OnOffServer } from "@matter/main/behaviors";
-import { map, mergeMap } from "rxjs";
+import { FanControl } from '@matter/main/clusters/fan-control'
+import { map, merge, mergeMap, Observable } from "rxjs";
 
 
 
@@ -42,7 +43,7 @@ export class Tuya2MatterFan {
                             })
                         })
                     }
-                }
+                },
             ),
             {
                 id: this.tuya.id,
@@ -79,13 +80,14 @@ export class Tuya2MatterFan {
 
         const observable = this.tuya.$dps.pipe(
             map(d => d.last),
-            mergeMap(async ({ switch: _, fan_speed_percent, light }) => {
-                endpoint.set({
-                    fanControl: {
-                        ..._ != undefined ? { fanMode: _ ? 4 : 0 } : {},
-                        ...fan_speed_percent != undefined ? { percentCurrent: Math.round(Number(fan_speed_percent) / 5 * 100) } : {}
-                    }
-                })
+            mergeMap(async dps => {
+                const { switch: _, fan_speed_percent, light } = dps
+                const fanControl = {
+                    ..._ != undefined ? { fanMode: Math.round(3 * Number(_) / 5) } : {},
+                    ...fan_speed_percent != undefined ? { percentCurrent: Math.round(Number(fan_speed_percent) / 5 * 100) } : {}
+                }
+                console.log({ dps, sync: fanControl })
+                endpoint.set({ fanControl })
                 if (light != undefined) {
                     const l = endpoint.parts.get('light') as Endpoint<OnOffLightDevice>
                     if (l) {
@@ -95,6 +97,14 @@ export class Tuya2MatterFan {
 
             })
         )
+
+        endpoint.events.fanControl.fanMode$Changed.on(fanMode => {
+            console.log({ fanMode })
+            fanMode == 0 && tuya.setDps({ switch: false })
+            fanMode == 1 && tuya.setDps({ switch: true, fan_speed_percent: '1' })
+            fanMode == 2 && tuya.setDps({ switch: true, fan_speed_percent: '3' })
+            fanMode == 3 && tuya.setDps({ switch: true, fan_speed_percent: '5' })
+        })
 
 
         return {
