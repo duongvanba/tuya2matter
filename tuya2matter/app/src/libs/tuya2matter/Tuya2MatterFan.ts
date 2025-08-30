@@ -64,32 +64,42 @@ export class Tuya2MatterFan {
         const observable = this.tuya.$dps.pipe(
             map(d => d.last),
             mergeMap(async dps => {
-                const { switch: on, fan_speed, light } = dps
-                if (on) {
-                    const speedCurrent = Number(fan_speed)
-                    const fanMode = Math.round(speedCurrent / 5 * 3)
-                    const percentCurrent = Math.round(speedCurrent / 5 * 100)
-                    
-                    if (!isNaN(speedCurrent)) {
+                const { fan_speed, light } = dps
+
+                if (dps.switch != undefined) {
+                    if (dps.switch) {
+                        console.log({ sync: { on: true } })
                         endpoint.set({
                             fanControl: {
-                                fanMode,
-                                percentCurrent,
-                                speedCurrent
+                                fanMode: 0,
+                                percentCurrent: 0,
+                                speedCurrent: 0
+                            }
+                        })
+                    } else {
+                        console.log({ sync: { on: false } })
+                        endpoint.set({
+                            fanControl: {
+                                fanMode: 1
                             }
                         })
                     }
+                }
 
-                } else {
+                if (fan_speed != undefined) {
+                    const speedCurrent = Number(fan_speed)
+                    const fanMode = Math.round(speedCurrent / 5 * 3)
+                    const percentCurrent = Math.round(speedCurrent / 5 * 100)
+                    console.log({ sync: { speedCurrent, fanMode, percentCurrent } })
                     endpoint.set({
                         fanControl: {
-                            fanMode: 0,
-                            percentCurrent: 0,
-                            speedCurrent: 0
+                            fanMode,
+                            percentCurrent,
+                            speedCurrent
                         }
                     })
                 }
-                
+
                 if (light != undefined) {
                     const l = endpoint.parts.get('light') as Endpoint<OnOffLightDevice>
                     if (l) {
@@ -101,6 +111,7 @@ export class Tuya2MatterFan {
         )
 
         endpoint.events.fanControl.fanMode$Changed.on((fanMode, _, { offline }) => {
+            console.log({ control: { fanMode, offline } })
             if (offline) return
             fanMode == 0 && tuya.setDps({ switch: false })
             fanMode == 1 && tuya.setDps({ switch: true, fan_speed: "1" })
@@ -109,8 +120,9 @@ export class Tuya2MatterFan {
         })
 
         endpoint.events.fanControl.percentCurrent$Changed.on((percent, _, { offline }) => {
-            if (offline) return
             const fan_speed = `${Math.ceil(Number(percent) / 20)}`
+            console.log({ control: { percent, offline, fan_speed } })
+            if (offline) return
             tuya.setDps({
                 switch: percent == 0 ? false : true,
                 fan_speed
