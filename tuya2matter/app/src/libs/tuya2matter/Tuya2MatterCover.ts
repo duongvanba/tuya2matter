@@ -30,10 +30,18 @@ export class Tuya2MatterCover {
                     reversed: boolean,
                     direction: MovementDirection,
                     targetPercent100ths?: number,
-                ) {
-                    targetPercent100ths != undefined && tuya.setDps({
-                        percent_control: targetPercent100ths / 100
-                    })
+                ) { 
+                    if (tuya.mapping.percent_control) {
+                        targetPercent100ths != undefined && tuya.setDps({
+                            percent_control: targetPercent100ths / 100
+                        })
+                    } else {
+                        const control = targetPercent100ths == 10000 ? 'close' : (
+                            targetPercent100ths == 0 ? 'open' : 'stop'
+                        )
+                        tuya.setDps({ control })
+                    }
+
                 }
                 override handleStopMovement(): MaybePromise {
                     tuya.setDps({
@@ -63,8 +71,8 @@ export class Tuya2MatterCover {
                 reachable: false,
             }
         })
- 
-        
+
+
 
         const observable = this.tuya.$dps.pipe(
             map(d => d.last),

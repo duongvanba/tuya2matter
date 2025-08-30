@@ -22,8 +22,8 @@ export class Tuya2Matter {
     ) { }
 
     #getMapper() {
-        if (['kg', 'tdq', 'cz','znjdq'].includes(this.tuya.category)) return new Tuya2MatterSwitch(this.aggregator, this.tuya)
-        if (this.tuya.category == 'cl') return new Tuya2MatterCover(this.aggregator, this.tuya)
+        if (['kg', 'tdq', 'cz', 'znjdq'].includes(this.tuya.category)) return new Tuya2MatterSwitch(this.aggregator, this.tuya)
+        if (['clkg', 'cl'].includes(this.tuya.category)) return new Tuya2MatterCover(this.aggregator, this.tuya)
         if (this.tuya.category == 'hps') return new Tuya2MatterOccupancySensor(this.aggregator, this.tuya)
         if (this.tuya.category == 'mcs') return new Tuya2MatterBinarySensor(this.aggregator, this.tuya)
         if (this.tuya.category == 'wxkg') return new Tuya2MatterButton(this.aggregator, this.tuya)
