@@ -1,8 +1,8 @@
 import { AggregatorEndpoint, } from "@matter/main/endpoints/aggregator";
 import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
-import { Endpoint, MaybePromise } from "@matter/main";
+import { Endpoint, MaybePromise, MutableEndpoint, SupportedBehaviors } from "@matter/main";
 import { GenericSwitchDevice, GenericSwitchRequirements, OnOffPlugInUnitRequirements, OnOffPlugInUnitDevice } from "@matter/main/devices";
-import { BridgedDeviceBasicInformationServer } from "@matter/main/behaviors";
+import { BridgedDeviceBasicInformationServer, ElectricalEnergyMeasurementServer, ElectricalPowerMeasurementBehavior, ElectricalPowerMeasurementServer } from "@matter/main/behaviors";
 import { map, tap } from "rxjs";
 
 
@@ -23,10 +23,9 @@ export class Tuya2MatterSwitch {
         const name = this.tuya.name
         const tuya = this.tuya
 
-        const endpoint = new Endpoint(GenericSwitchDevice.with(BridgedDeviceBasicInformationServer), {
-            id: this.tuya.id,
-            parts: switches.map(([name, { code }], index) => {
-                const type = OnOffPlugInUnitDevice.withBehaviors(class extends OnOffPlugInUnitRequirements.OnOffServer {
+        const parts = switches.map(([name, { code }], index) => {
+            const type = OnOffPlugInUnitDevice.withBehaviors(
+                class extends OnOffPlugInUnitRequirements.OnOffServer {
                     override initialize(): MaybePromise { }
                     override on() {
                         tuya.setDps({ [code]: true })
@@ -34,22 +33,90 @@ export class Tuya2MatterSwitch {
                     override off() {
                         tuya.setDps({ [code]: false })
                     }
-                })
-                return {
-                    id: code,
-                    type,
-                    onOff: { onOff: false },
-                    name: code
                 }
-            }),
-            bridgedDeviceBasicInformation: {
-                nodeLabel: name,
-                productName: name,
-                productLabel: name,
-                serialNumber: this.tuya.config.uuid,
-                reachable: false 
+            )
+            return {
+                id: code,
+                type,
+                onOff: { onOff: false },
+                name: code,
+
             }
         })
+
+        const bridgedDeviceBasicInformation = {
+            nodeLabel: name,
+            productName: name,
+            productLabel: name,
+            serialNumber: this.tuya.config.uuid,
+            reachable: false
+        }
+
+        if (tuya.mapping.cur_current) {
+            const endpoint = new Endpoint(GenericSwitchDevice.with(
+                BridgedDeviceBasicInformationServer,
+                ElectricalPowerMeasurementServer 
+            ), {
+                id: this.tuya.id,
+                parts,
+                bridgedDeviceBasicInformation,
+                electricalPowerMeasurement: {
+                    activePower: 0,
+                    activeCurrent: 0,
+                    voltage: 220,
+                    accuracy: [], // 1%
+                    numberOfMeasurementTypes: 4, // Voltage + Current + Power
+                    powerMode: 0,
+                    ranges: []
+                }
+            })
+
+
+
+            const observable = tuya.$dps.pipe(
+                map(d => d.last),
+                tap(dps => {
+                    Object.entries(dps).forEach(([key, on]) => {
+                        if (SWITCH_CODES.includes(key)) {
+                            const target = endpoint.parts.get(key) as Endpoint<OnOffPlugInUnitDevice>
+                            target?.set({ onOff: { onOff: !!on } })
+                        }
+                    })
+
+                    const electricalPowerMeasurement: Partial<ElectricalPowerMeasurementBehavior.State> = {
+                        ...dps.cur_current != undefined ? { activeCurrent: dps.cur_current } : {},
+                        ...dps.cur_power != undefined ? { activePower: dps.cur_power } : {},
+                        ...dps.cur_voltage != undefined ? { voltage: dps.cur_voltage } : {},
+                    }
+
+                    Object.keys(electricalPowerMeasurement).length > 0 && endpoint.set({
+                        electricalPowerMeasurement
+                    } as any)
+
+                })
+            )
+
+            return {
+                endpoints: [endpoint],
+                observable
+            }
+
+        }
+
+
+
+
+
+
+        const endpoint = new Endpoint(GenericSwitchDevice.with(
+            BridgedDeviceBasicInformationServer
+        ), {
+            id: this.tuya.id,
+            parts,
+            bridgedDeviceBasicInformation
+        })
+
+
 
         const observable = tuya.$dps.pipe(
             map(d => d.last),
@@ -60,6 +127,7 @@ export class Tuya2MatterSwitch {
                         target?.set({ onOff: { onOff: !!on } })
                     }
                 })
+
             })
         )
 
