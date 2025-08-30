@@ -1,6 +1,6 @@
 {
   "name": "tuya2matter",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "dependencies": {
     "@matter/main": "^0.15.3",
     "@matter/node": "^0.15.3",

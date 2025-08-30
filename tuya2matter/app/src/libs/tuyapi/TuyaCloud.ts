@@ -316,7 +316,7 @@ export class TuyaCloud {
                     time: Date.now() - a
                 })
                 const hubs = list.filter(
-                    c => !c.sub && c.product_name.toLowerCase().includes('gateway')
+                    c => !c.sub && ['wfcon', 'wg2'].includes(c.category)
                 ).reduce((p, c) => ({ ...p, [c.id]: c }), {} as { [id: string]: DeviceMetadata })
 
                 const devices = list.map(d => {

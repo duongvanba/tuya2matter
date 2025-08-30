@@ -483,4 +483,9 @@ export class TuyaLocal {
         this.stop$.next(true)
     }
 
+    async isChild(node_id: string) {
+        const dps = this.sync(node_id)
+        console.log(dps)
+    }
+
 }
