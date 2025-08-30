@@ -71,16 +71,17 @@ export class Tuya2MatterFan {
                         console.log({ sync: { on: true } })
                         endpoint.set({
                             fanControl: {
-                                fanMode: 0,
-                                percentCurrent: 0,
-                                speedCurrent: 0
+                                fanMode: 1,
+
                             }
                         })
                     } else {
-                        console.log({ sync: { on: false } })
+                        console.log({ sync: { on: false } }) 
                         endpoint.set({
                             fanControl: {
-                                fanMode: 1
+                                fanMode: 0,
+                                percentCurrent: 0,
+                                speedCurrent: 0
                             }
                         })
                     }
@@ -119,7 +120,7 @@ export class Tuya2MatterFan {
             fanMode == 3 && tuya.setDps({ switch: true, fan_speed: "5" })
         })
 
-        endpoint.events.fanControl.percentCurrent$Changed.on((percent, _, { offline }) => {
+        endpoint.events.fanControl.percentSetting$Changed.on((percent, _, { offline }) => {
             const fan_speed = `${Math.ceil(Number(percent) / 20)}`
             console.log({ control: { percent, offline, fan_speed } })
             if (offline) return
