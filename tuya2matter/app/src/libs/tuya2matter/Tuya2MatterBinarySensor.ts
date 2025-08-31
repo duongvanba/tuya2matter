@@ -71,13 +71,13 @@ export class Tuya2MatterBinarySensor {
                     } : {}
                 })
             })
-        ) 
+        )
 
-         return {
-            endpoints: [endpoint],
+
+        return {
+            endpoint,
             observable
         }
-
 
     }
 

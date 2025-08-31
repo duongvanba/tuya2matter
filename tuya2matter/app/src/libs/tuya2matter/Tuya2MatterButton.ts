@@ -50,7 +50,7 @@ export class Tuya2MatterButton {
             parts: [1, 2, 3, 4].map(n => {
                 return {
                     id: `switch${n}_value`,
-                    type: GenericSwitchDevice.with(SwitchServer.with("MomentarySwitchMultiPress", "MomentarySwitchRelease", "MomentarySwitch")) 
+                    type: GenericSwitchDevice.with(SwitchServer.with("MomentarySwitchMultiPress", "MomentarySwitchRelease", "MomentarySwitch"))
                 }
             }),
 
@@ -108,12 +108,10 @@ export class Tuya2MatterButton {
         )
 
 
-
         return {
-            endpoints: [endpoint],
+            endpoint,
             observable
         }
-
 
     }
 

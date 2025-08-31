@@ -30,7 +30,7 @@ export class Tuya2MatterCover {
                     reversed: boolean,
                     direction: MovementDirection,
                     targetPercent100ths?: number,
-                ) { 
+                ) {
                     if (tuya.mapping.percent_control) {
                         targetPercent100ths != undefined && tuya.setDps({
                             percent_control: targetPercent100ths / 100
@@ -90,14 +90,9 @@ export class Tuya2MatterCover {
         )
 
         return {
-            endpoints: [endpoint] as any as Endpoint[],
+            endpoint:endpoint as  Endpoint,
             observable
         }
-
-
-
-
-
 
 
 

@@ -83,13 +83,9 @@ export class Tuya2MatterTemperatureLight {
 
 
         return {
-            endpoints: [endpoint] as any as Endpoint[],
+            endpoint: endpoint as Endpoint,
             observable
         }
-
-
-
-
 
 
 

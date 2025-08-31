@@ -61,9 +61,10 @@ export class Tuya2MatterOccupancySensor {
         )
 
         return {
-            endpoints: [endpoint],
+            endpoint,
             observable
         }
+
 
 
     }

@@ -6,7 +6,7 @@ import { Tuya2MatterCover } from "./Tuya2MatterCover.js";
 import { Tuya2MatterOccupancySensor } from "./Tuya2MatterOccupancySensor.js";
 import { Tuya2MatterBinarySensor } from "./Tuya2MatterBinarySensor.js";
 import { Tuya2MatterButton } from "./Tuya2MatterButton.js";
-import { BehaviorSubject, filter, from, merge, of, skip, switchMap, takeUntil, tap } from "rxjs";
+import { BehaviorSubject, filter, finalize, merge, takeUntil, tap } from "rxjs";
 import { Tuya2MatterTemperatureLight } from "./Tuya2MatterTemperatureLight.js";
 import { Tuya2MatterFan } from "./Tuya2MatterFan.js";
 
@@ -36,26 +36,24 @@ export class Tuya2Matter {
         if (!device) return
         const link = device.link()
 
-        for (const e of link.endpoints) {
-            await this.aggregator.add(e)
-        }
+        await this.aggregator.add(link.endpoint)
 
         merge(
             // Sync state
             link.observable,
 
             // First sync
-            from(this.tuya.sync()).pipe(
-                switchMap(() => this.tuya.$status),
+            this.tuya.$status.pipe(
                 tap(status => {
-                    link.endpoints.forEach(
-                        e => e.set({ bridgedDeviceBasicInformation: { reachable: status == 'online' } } as any)
-                    )
+                    const reachable = status == 'online'
+                    !this.tuya.config.sub && console.log(`Update status of ${this.tuya.name} to ${reachable ? 'ONLINE' : 'OFFLINE'}`)
+                    link.endpoint.set({ bridgedDeviceBasicInformation: { reachable } })
                 })
             )
 
         ).pipe(
-            takeUntil(this.#stop.pipe(filter(Boolean)))
+            takeUntil(this.#stop.pipe(filter(Boolean))),
+            finalize(() => link.endpoint.delete())
         ).subscribe()
     }
 

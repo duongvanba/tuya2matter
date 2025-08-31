@@ -59,17 +59,10 @@ export class Tuya2MatterLock {
         )
 
 
-
         return {
-            endpoints: [endpoint] as any as Endpoint[],
+            endpoint: endpoint as Endpoint,
             observable
         }
-
-
-
-
-
-
 
 
     }

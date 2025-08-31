@@ -55,7 +55,7 @@ export class Tuya2MatterSwitch {
         if (tuya.mapping.cur_current) {
             const endpoint = new Endpoint(GenericSwitchDevice.with(
                 BridgedDeviceBasicInformationServer,
-                ElectricalPowerMeasurementServer 
+                ElectricalPowerMeasurementServer
             ), {
                 id: this.tuya.id,
                 parts,
@@ -97,7 +97,7 @@ export class Tuya2MatterSwitch {
             )
 
             return {
-                endpoints: [endpoint],
+                endpoint,
                 observable
             }
 
@@ -132,9 +132,10 @@ export class Tuya2MatterSwitch {
         )
 
         return {
-            endpoints: [endpoint],
+            endpoint,
             observable
         }
+
 
     }
 

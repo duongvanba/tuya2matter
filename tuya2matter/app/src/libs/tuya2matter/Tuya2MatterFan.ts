@@ -62,36 +62,22 @@ export class Tuya2MatterFan {
         )
 
         const observable = this.tuya.$dps.pipe(
-            map(d => d.last),
+            map(d => d.state),
             mergeMap(async dps => {
                 const { fan_speed, light } = dps
 
-                if (dps.switch != undefined) {
-                    if (dps.switch) {
-                        console.log({ sync: { on: true } })
-                        endpoint.set({
-                            fanControl: {
-                                fanMode: 1,
-
-                            }
-                        })
-                    } else {
-                        console.log({ sync: { on: false } }) 
-                        endpoint.set({
-                            fanControl: {
-                                fanMode: 0,
-                                percentCurrent: 0,
-                                speedCurrent: 0
-                            }
-                        })
+                dps.switch === false && endpoint.set({
+                    fanControl: {
+                        fanMode: 0,
+                        percentCurrent: 0,
+                        speedCurrent: 0
                     }
-                }
+                })
 
-                if (fan_speed != undefined) {
+                if (dps.switch != undefined && fan_speed != undefined) {
                     const speedCurrent = Number(fan_speed)
                     const fanMode = Math.round(speedCurrent / 5 * 3)
                     const percentCurrent = Math.round(speedCurrent / 5 * 100)
-                    console.log({ sync: { speedCurrent, fanMode, percentCurrent } })
                     endpoint.set({
                         fanControl: {
                             fanMode,
@@ -100,6 +86,7 @@ export class Tuya2MatterFan {
                         }
                     })
                 }
+
 
                 if (light != undefined) {
                     const l = endpoint.parts.get('light') as Endpoint<OnOffLightDevice>
@@ -130,17 +117,10 @@ export class Tuya2MatterFan {
             })
         })
 
-
         return {
-            endpoints: [endpoint] as any as Endpoint[],
+            endpoint: endpoint as Endpoint,
             observable
         }
-
-
-
-
-
-
 
 
     }
