@@ -64,11 +64,30 @@ export class Tuya2MatterSwitch {
                     activePower: 0,
                     activeCurrent: 0,
                     voltage: 220,
-                    accuracy: [], // 1%
+                    accuracy: [
+                        {
+                            measurementType: 0, // Voltage
+                            accuracyRanges: [
+                                {
+                                    rangeMax: 25000, // 250V
+                                    rangeMin: 0,
+                                    fixedMax: 25000,
+                                    fixedMin: 0,
+
+                                    fixedTypical: 22000,
+                                    percentMax: 1,
+                                    percentMin: 1,
+                                    percentTypical: 1
+                                }
+                            ],
+                            maxMeasuredValue: 25000, // 250V
+                            minMeasuredValue: 0,
+                            measured: true
+                        }
+                    ], // 1%
                     numberOfMeasurementTypes: 4, // Voltage + Current + Power
-                    powerMode: 0,
-                    ranges: []
-                }
+                    powerMode: 0
+                },
             })
 
 

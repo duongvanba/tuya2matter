@@ -73,7 +73,6 @@ export class Tuya2MatterCover {
         })
 
 
-
         const observable = this.tuya.$dps.pipe(
             map(d => d.last),
             mergeMap(async dps => {

@@ -9,6 +9,7 @@ import { Tuya2MatterButton } from "./Tuya2MatterButton.js";
 import { BehaviorSubject, filter, finalize, merge, takeUntil, tap } from "rxjs";
 import { Tuya2MatterTemperatureLight } from "./Tuya2MatterTemperatureLight.js";
 import { Tuya2MatterFan } from "./Tuya2MatterFan.js";
+import { BridgedDeviceBasicInformationServer } from "@matter/node/behaviors";
 
 
 
@@ -47,7 +48,7 @@ export class Tuya2Matter {
                 tap(status => {
                     const reachable = status == 'online'
                     !this.tuya.config.sub && console.log(`Update status of ${this.tuya.name} to ${reachable ? 'ONLINE' : 'OFFLINE'}`)
-                    link.endpoint.set({ bridgedDeviceBasicInformation: { reachable } })
+                    link.endpoint.set({ bridgedDeviceBasicInformation: { reachable } }) 
                 })
             )
 
