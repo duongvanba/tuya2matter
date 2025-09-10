@@ -16,7 +16,7 @@ export class Tuya2MatterBinarySensor {
 
     link() {
 
-        const name = this.tuya.name
+        const name = this.tuya.name.slice(0,32)
 
         const endpoint = new Endpoint(
             ContactSensorDevice.with(BridgedDeviceBasicInformationServer).with(PowerSourceBaseServer), {

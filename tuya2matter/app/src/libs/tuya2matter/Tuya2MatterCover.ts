@@ -18,7 +18,7 @@ export class Tuya2MatterCover {
 
     link() {
 
-        const name = this.tuya.name
+      const name = this.tuya.name.slice(0,32)
 
         const tuya = this.tuya
 

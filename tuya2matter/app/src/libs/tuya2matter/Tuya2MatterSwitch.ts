@@ -20,7 +20,7 @@ export class Tuya2MatterSwitch {
         const switches = Object.entries(this.tuya.config.mapping).filter(
             ([k, v]) => SWITCH_CODES.includes(k)
         )
-        const name = this.tuya.name
+      const name = this.tuya.name.slice(0,32)
         const tuya = this.tuya
 
         const parts = switches.map(([name, { code }], index) => {

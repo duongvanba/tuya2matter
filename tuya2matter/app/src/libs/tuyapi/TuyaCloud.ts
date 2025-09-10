@@ -363,8 +363,39 @@ export class TuyaCloud {
         })
     }
 
-    async sendCommand(device_id: string, dps: ReadableDps) {
+    async listSences(home_id: string) {
+        const { data } = await this.request<Array<{
+            scene_id: string
+            name: string
+            enabled: boolean
+            background: string
+            actions: Array<{
+                action_executor: "dpIssue" | "delay"
+                entity_id: string
+                executor_property: Record<string, string>
+            }>
+        }>>({
+            method: 'GET',
+            path: `/v1.0/m/scene/ha/home/scenes`,
+            params: { homeId: home_id }
+        })
+        return data
+    }
 
+    async triggerSence(home_id: string, scene_id: string) {
+        return await this.request({
+            method: 'POST',
+            path: `/v1.0/m/scene/ha/trigger`,
+            params: { homeId: home_id, sceneId: scene_id }
+        })
+    }
+
+    async sendCommand(device_id: string, dps: ReadableDps) {
+        await this.request({
+            method: 'POST',
+            path: `/v1.1/m/thing/${device_id}/commands`,
+            body: dps
+        })
     }
 
 

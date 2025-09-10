@@ -16,7 +16,7 @@ export class Tuya2MatterButton {
 
     link() {
 
-        const name = this.tuya.name
+       const name = this.tuya.name.slice(0,32)
 
         const endpoint = new Endpoint(
             GenericSwitchDevice.with(BridgedDeviceBasicInformationServer).with(PowerSourceBaseServer).with(SwitchServer.with("MomentarySwitchMultiPress", "MomentarySwitchRelease", "MomentarySwitch")), {

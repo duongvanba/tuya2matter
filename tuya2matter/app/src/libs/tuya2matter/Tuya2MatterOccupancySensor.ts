@@ -13,7 +13,7 @@ export class Tuya2MatterOccupancySensor {
 
     link() {
 
-        const name = this.tuya.name
+        const name = this.tuya.name.slice(0,32)
 
         const endpoint = new Endpoint(
             OccupancySensorDevice.with(
