@@ -10,6 +10,7 @@ import { BehaviorSubject, filter, finalize, merge, takeUntil, tap } from "rxjs";
 import { Tuya2MatterTemperatureLight } from "./Tuya2MatterTemperatureLight.js";
 import { Tuya2MatterFan } from "./Tuya2MatterFan.js";
 import { BridgedDeviceBasicInformationServer } from "@matter/node/behaviors";
+import { Tuya2MatterLock } from "./Tuya2MatterLock.js";
 
 
 
@@ -30,6 +31,8 @@ export class Tuya2Matter {
         if (this.tuya.category == 'wxkg') return new Tuya2MatterButton(this.aggregator, this.tuya)
         if (this.tuya.category == 'dd') return new Tuya2MatterTemperatureLight(this.aggregator, this.tuya)
         if (this.tuya.category == 'fs') return new Tuya2MatterFan(this.aggregator, this.tuya)
+        if (this.tuya.category == 'jtmspro') return new Tuya2MatterLock(this.aggregator, this.tuya)
+
     }
 
     async init() {
@@ -48,7 +51,7 @@ export class Tuya2Matter {
                 tap(status => {
                     const reachable = status == 'online'
                     !this.tuya.config.sub && console.log(`Update status of ${this.tuya.name} to ${reachable ? 'ONLINE' : 'OFFLINE'}`)
-                    link.endpoint.set({ bridgedDeviceBasicInformation: { reachable } }) 
+                    link.endpoint.set({ bridgedDeviceBasicInformation: { reachable } })
                 })
             )
 

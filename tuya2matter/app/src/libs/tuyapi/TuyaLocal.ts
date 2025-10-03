@@ -32,6 +32,7 @@ export type RawDps = Partial<{
 }>
 
 export type ReadableDps = Partial<{
+    residual_electricity: number
     doorcontact_state: boolean
     battery_percentage: number
     percent_control: number
@@ -45,11 +46,11 @@ export type ReadableDps = Partial<{
     fan_speed: string
     light: boolean
     illuminance_value: number
-    open_close: boolean
     cur_current: number
     cur_power: number
     cur_voltage: number
     add_ele: number
+    closed_opened: "closed" | "open"
     [key: number]: string | number | boolean
 }>
 

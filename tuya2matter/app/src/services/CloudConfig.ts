@@ -22,7 +22,6 @@ export class CloudConfig extends BehaviorSubject<false | { api: TuyaCloud, confi
                 Bun.file(this.#CREDENTIAL_PATH).write(JSON.stringify(config, null, 2))
             })
         ).subscribe()
-
         if (existsSync(this.#DEVICES_PATH) && process.env.DEV) {
             console.log(`Use cache devices`)
             const config = await Bun.file(this.#DEVICES_PATH).json() as TuyaDeviceHomeMap

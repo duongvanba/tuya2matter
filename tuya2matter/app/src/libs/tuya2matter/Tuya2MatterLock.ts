@@ -1,10 +1,9 @@
 import { AggregatorEndpoint, } from "@matter/main/endpoints/aggregator";
 import { TuyaDevice } from "../tuyapi/TuyaDevice.js";
-import { Endpoint, MaybePromise } from "@matter/main";
-import { FanDevice, DoorLockDevice } from "@matter/main/devices";
+import { Endpoint } from "@matter/main";
+import { DoorLockDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer, DoorLockServer } from "@matter/main/behaviors";
-import { FanControl } from '@matter/main/clusters/fan-control'
-import { map, merge, mergeMap, Observable } from "rxjs";
+import { map, mergeMap } from "rxjs";
 
 
 
@@ -17,7 +16,7 @@ export class Tuya2MatterLock {
 
     link() {
 
-       const name = this.tuya.name.slice(0,32)
+        const name = this.tuya.name.slice(0, 32)
         const tuya = this.tuya
 
         const endpoint = new Endpoint(
@@ -25,10 +24,10 @@ export class Tuya2MatterLock {
                 BridgedDeviceBasicInformationServer,
                 class extends DoorLockServer {
                     override unlockDoor() {
-                        tuya.setDps({ open_close: true })
+                        console.log({ unlock: true })
                     }
                     override lockDoor() {
-                        tuya.setDps({ open_close: false })
+                        console.log({ lock: true })
                     }
                 }
             ),
@@ -42,7 +41,15 @@ export class Tuya2MatterLock {
                     reachable: false,
                 },
                 doorLock: {
-                    lockState: 0
+                    lockState: 1,
+                    lockType: 1,
+                    supportedOperatingModes: {
+                        noRemoteLockUnlock: false,
+                        normal: true,
+                        alwaysSet: 2047,
+
+                    },
+                    actuatorEnabled: true,
                 }
             }
         )
@@ -50,9 +57,12 @@ export class Tuya2MatterLock {
         const observable = this.tuya.$dps.pipe(
             map(d => d.last),
             mergeMap(async dps => {
+                console.log({ dps })
                 endpoint.set({
                     doorLock: {
-                        ...dps.open_close != undefined ? { lockState: dps.open_close ? 2 : 1 } : {}
+                        ...dps.closed_opened != undefined ? {
+                            lockState: dps.closed_opened == 'open' ? 2 : 1
+                        } : {},
                     }
                 })
             })
