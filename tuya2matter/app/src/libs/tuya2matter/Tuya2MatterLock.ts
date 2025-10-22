@@ -25,6 +25,11 @@ export class Tuya2MatterLock {
                 class extends DoorLockServer {
                     override unlockDoor() {
                         console.log({ unlock: true })
+
+                        tuya.setDps({
+                            // HOW TO UNLOCK WITH DPS ???
+                        })
+                        
                     }
                     override lockDoor() {
                         console.log({ lock: true })
