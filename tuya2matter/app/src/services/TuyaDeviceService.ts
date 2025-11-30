@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { TuyaDevice } from "../libs/tuyapi/TuyaDevice.js";
-import { exhaustMap, filter, first, firstValueFrom, groupBy, mergeAll, mergeMap, Observable, Subject, switchMap, tap } from "rxjs";
+import { exhaustMap, filter, first, firstValueFrom, groupBy, map, mergeAll, mergeMap, Observable, Subject, switchMap, tap } from "rxjs";
 import { CloudConfig } from "./CloudConfig.js";
 import { TuyaLocal } from "../libs/tuyapi/TuyaLocal.js";
 
@@ -21,8 +21,9 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
             filter(Boolean),
             first(),
             switchMap(({ config }) => TuyaLocal.watch().pipe(
-                groupBy($ => $.gwId),
+                groupBy($ => $.payload.gwId),
                 mergeMap($ => $.pipe(
+                    map($ => ({ ...$, ...$.payload })), 
                     exhaustMap(async $ => {
                         if (this.#connections.has($.gwId)) {
                             const connection = this.#connections.get($.gwId)!
@@ -44,13 +45,12 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
                         await firstValueFrom(connection.$status.pipe(
                             filter(s => s == 'online')
                         ))
-                        console.log(`[${metadata.id}] Connected to ${metadata.name} on ${$.ip}`)
                         this.#connections.set($.gwId, connection)
                         const devices = [
                             ...metadata.is_gateway ? [] : [new TuyaDevice({ ...metadata, ip: $.ip })],
                             ...subs ? subs.map(m => new TuyaDevice({ ...m, ip: $.ip })) : []
                         ]
-                        devices.forEach(d => d.linkLocal(connection)) 
+                        devices.forEach(d => d.linkLocal(connection))
                         return devices
                     }),
                 )),

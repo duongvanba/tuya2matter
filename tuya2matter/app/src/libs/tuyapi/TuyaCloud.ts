@@ -1,7 +1,7 @@
 
 import got from 'got';
 import * as crypto from "crypto";
-import { BehaviorSubject, filter, finalize, firstValueFrom, from, interval, mergeMap, reduce, ReplaySubject, startWith, Subject, takeUntil, toArray } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, from, interval, mergeMap, reduce, ReplaySubject, takeUntil, toArray } from 'rxjs';
 import { DeviceMetadata } from './DeviceMetadata.js';
 import { Observable } from 'rxjs';
 import { ReadableDps } from './TuyaLocal.js';

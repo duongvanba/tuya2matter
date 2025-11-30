@@ -24,7 +24,6 @@ export class Tuya2MatterLock {
                 BridgedDeviceBasicInformationServer,
                 class extends DoorLockServer {
                     override unlockDoor() {
-                        console.log({ unlock: true })
 
                         tuya.setDps({
                             // HOW TO UNLOCK WITH DPS ???
@@ -32,7 +31,6 @@ export class Tuya2MatterLock {
                         
                     }
                     override lockDoor() {
-                        console.log({ lock: true })
                     }
                 }
             ),
@@ -62,7 +60,6 @@ export class Tuya2MatterLock {
         const observable = this.tuya.$dps.pipe(
             map(d => d.last),
             mergeMap(async dps => {
-                console.log({ dps })
                 endpoint.set({
                     doorLock: {
                         ...dps.closed_opened != undefined ? {
