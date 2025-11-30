@@ -269,10 +269,7 @@ export class TuyaLocal {
             fromEvent(socket, 'error'),
 
             // Stop
-            this.stop$,
-
-
-            timer(15000)
+            this.stop$ 
         ))
         connection.unsubscribe()
         this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  OFFLINE`)

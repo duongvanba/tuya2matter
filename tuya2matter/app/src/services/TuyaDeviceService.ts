@@ -21,7 +21,7 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
             filter(Boolean),
             first(),
             switchMap(({ config }) => TuyaLocal.watch().pipe(
-                filter(a => a.payload.gwId == 'eb693f2729ec0a6c57y38w'),
+                // filter(a => a.payload.gwId == 'eb693f2729ec0a6c57y38w'),
                 groupBy($ => $.payload.gwId),
                 mergeMap($ => $.pipe(
                     map($ => ({ ...$, ...$.payload })), 
