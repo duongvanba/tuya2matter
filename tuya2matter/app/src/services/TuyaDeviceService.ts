@@ -40,7 +40,6 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
                         ) : null
                         subs && subs.forEach(d => this.#devices.add(d.id))
 
-                        console.log(`[${metadata.id}] Found ${metadata.name} on ${$.ip} (v${$.version})`)
                         const connection = new TuyaLocal(metadata, subs)
                         connection.connect($)
                         await firstValueFrom(connection.$status.pipe(

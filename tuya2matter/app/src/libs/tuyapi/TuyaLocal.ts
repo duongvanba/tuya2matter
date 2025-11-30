@@ -151,7 +151,7 @@ export class TuyaLocal {
         this.$status.next('connecting')
         this.#$metadata.next({ ip, version })
         this.#seq = 100
-        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  Connecting to ${this.config.name}`)
+        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> [CONNECTING] ${this.config.name}`)
 
 
         const parser = new MessageParser({
@@ -174,10 +174,10 @@ export class TuyaLocal {
             )
         )
         if (!socket) {
-            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  Can not connect to ${this.config.name} `)
+            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> [ERROR] ${this.config.name} `)
             return
         }
-        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  Connected to ${this.config.name} `)
+        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> [CONNECTED]  ${this.config.name}`)
 
 
         const connection = merge(
@@ -209,7 +209,7 @@ export class TuyaLocal {
                         }
                         if (just_online) {
                             this.$status.next('online')
-                            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  ONLINE [protocol ${version}]`)
+                            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> [ONLINE]     ${this.config.name} `)
                         }
 
                     }
@@ -246,7 +246,7 @@ export class TuyaLocal {
 
 
 
-        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  Syncing [protocol ${version}]`)
+        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> [SYNCING]    ${this.config.name} `)
         const decrypted = ['3.4', '3.5'].includes(version) ? await this.#negotiate(version, parser) : true
         if (!decrypted) {
             console.error(`[${new Date().toLocaleString()}] [${ip}] <${this.config.id}> Can not setup 3.4 protocol`)
@@ -254,10 +254,12 @@ export class TuyaLocal {
             return
         }
 
-        await this.refresh()
-        this.config.sub ? await this.sync() : await this.syncAll()
-
-
+        if (this.config.is_gateway) {
+            await this.syncAll()
+        } else {
+            await this.refresh()
+            await this.sync()
+        }
         await firstValueFrom(merge(
             interval(10000).pipe(
                 mergeMap(() => this.ping()),
@@ -269,7 +271,7 @@ export class TuyaLocal {
             fromEvent(socket, 'error'),
 
             // Stop
-            this.stop$ 
+            this.stop$
         ))
         connection.unsubscribe()
         this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  OFFLINE`)
@@ -448,8 +450,8 @@ export class TuyaLocal {
             await this.sync()
             return
         }
-        for (const cid of this.cids) {
-            await this.sync(cid.id)
+        for (const sub_device of this.cids) { 
+            await this.sync(sub_device.node_id)
         }
     }
 
