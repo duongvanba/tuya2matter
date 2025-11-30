@@ -9,10 +9,8 @@ import { Tuya2MatterButton } from "./Tuya2MatterButton.js";
 import { BehaviorSubject, filter, finalize, merge, takeUntil, tap } from "rxjs";
 import { Tuya2MatterTemperatureLight } from "./Tuya2MatterTemperatureLight.js";
 import { Tuya2MatterFan } from "./Tuya2MatterFan.js";
-import { BridgedDeviceBasicInformationServer } from "@matter/node/behaviors";
 import { Tuya2MatterLock } from "./Tuya2MatterLock.js";
 import { Tuya2MatterAirSensor } from "./Tuya2MatterAirSensor.js";
-import { Status } from "@matter/main/types";
 
 
 
