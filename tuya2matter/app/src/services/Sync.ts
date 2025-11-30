@@ -19,7 +19,6 @@ export class SyncService {
                     mergeMap(async device => {
                         const linker = new Tuya2Matter(aggregator, device)
                         await linker.init()
-                        console.log(`[${new Date().toLocaleString()}]    [${device.config.ip}] <${device.config.id}>  ${device.config.name}:  Matter ready`)
                     })
                 )
             }),

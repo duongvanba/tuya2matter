@@ -12,6 +12,7 @@ import { Tuya2MatterFan } from "./Tuya2MatterFan.js";
 import { BridgedDeviceBasicInformationServer } from "@matter/node/behaviors";
 import { Tuya2MatterLock } from "./Tuya2MatterLock.js";
 import { Tuya2MatterAirSensor } from "./Tuya2MatterAirSensor.js";
+import { Status } from "@matter/main/types";
 
 
 
@@ -34,7 +35,7 @@ export class Tuya2Matter {
         if (this.tuya.category == 'fs') return new Tuya2MatterFan(this.aggregator, this.tuya)
         if (this.tuya.category == 'jtmspro') return new Tuya2MatterLock(this.aggregator, this.tuya)
         if (this.tuya.category == 'hjjcy') return new Tuya2MatterAirSensor(this.aggregator, this.tuya)
-            
+
 
     }
 
@@ -51,9 +52,10 @@ export class Tuya2Matter {
 
             // First sync
             this.tuya.$status.pipe(
-                tap(status => {
+                tap(status => { 
                     const reachable = status == 'online'
                     link.endpoint.set({ bridgedDeviceBasicInformation: { reachable } })
+                    reachable && console.log(`[${new Date().toLocaleString()}]                    <${device.tuya.id}>  ${device.tuya.name}:  Matter ready`)
                 })
             )
 

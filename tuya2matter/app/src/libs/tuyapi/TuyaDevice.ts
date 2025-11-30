@@ -1,4 +1,4 @@
-import { BehaviorSubject, EMPTY, ReplaySubject, Subject, filter, finalize, map, merge, mergeMap, skip, takeUntil, tap } from "rxjs";
+import { BehaviorSubject, EMPTY, ReplaySubject, filter, finalize, map, merge, mergeMap, take, takeUntil, tap } from "rxjs";
 import { ConnectionStatusCode, RawDps, ReadableDps, TuyaLocal } from "./TuyaLocal.js";
 import { DeviceMetadata } from "./DeviceMetadata.js";
 import { TuyaCloud } from "./TuyaCloud.js";
@@ -45,9 +45,11 @@ export class TuyaDevice {
 
     linkLocal(connection: TuyaLocal) {
         this.#local = connection
+        const device_node_id = this.config.sub ? this.config.node_id : this.config.id
         return merge(
             // Dps sync 
-            connection.registerDps(this.config.sub ? this.config.node_id : this.config.id).pipe(
+            connection.registerDps(device_node_id).pipe(
+                filter(Boolean),
                 map(dps => this.#toReadableDps(dps)),
                 tap(dps => {
                     if (Object.keys(dps).length > 0) {
@@ -58,22 +60,36 @@ export class TuyaDevice {
                                 ... this.$dps.value.state,
                                 ...dps
                             }
-                        })
+                        }) 
+                        this.$status.getValue() != 'online' && this.$status.next('online')
                     }
                 }),
-                tap(() => this.$status.getValue() != 'online' && this.$status.next('online')),
+
+            ),
+
+            // Sync first state
+            connection.$status.pipe(
+                filter(status => status == 'online' && this.$status.value != 'online'),
+                tap(() => connection.sync(device_node_id))
+            ),
+
+
+            // sync offline
+            connection.$status.pipe(
+                filter(status => status != 'online'),
+                tap(() => this.$status.value != 'offline' && this.$status.next('offline'))
             ),
 
             // Sync state with last command
             connection.$status.pipe(
                 filter(status => status == 'online'),
-                filter(() => Object.keys(this.$dps.value.pending).length > 0), 
+                filter(() => Object.keys(this.$dps.value.pending).length > 0),
                 mergeMap(async () => {
                     const pending = this.$dps.value.pending
                     this.$dps.next({
                         ... this.$dps.value,
-                        last:{},
-                        pending:{}
+                        last: {},
+                        pending: {}
                     })
                     await connection.setDps(
                         this.#toRawDps(pending),
@@ -81,10 +97,6 @@ export class TuyaDevice {
                     )
                 })
             ),
-
-
-
-
 
 
             // Sync with sub report from connection
@@ -186,9 +198,8 @@ export class TuyaDevice {
         )
     }
 
-    async sync() {
-        await this.#local?.sync(this.config.node_id)
-    }
+
+
 
     close() {
         this.#stop$.next(true)
