@@ -1,5 +1,6 @@
 import { Controller, Get } from "@nestjs/common";
-import { CloudConfig } from "../services/CloudConfig.js";
+import { TuyaDeviceService } from "../services/TuyaDeviceService.js";
+import { firstValueFrom } from "rxjs";
 
 
 
@@ -7,17 +8,15 @@ import { CloudConfig } from "../services/CloudConfig.js";
 export class DeviceController {
 
 
-    constructor(private cloud: CloudConfig) { }
+    constructor(private s: TuyaDeviceService) { }
 
 
     @Get()
-    devices() {
-        if (this.cloud.value) {
-            const { config } = this.cloud.value
+    async devices() {
+        if (this.s.homes$) {
+            const devies = await firstValueFrom(this.s.homes$)
             return {
-                data: {
-                    devies: config
-                }
+                data: { devies }
             }
         }
         return {

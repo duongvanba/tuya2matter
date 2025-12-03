@@ -1,14 +1,15 @@
 
 import got from 'got';
 import * as crypto from "crypto";
-import { BehaviorSubject, firstValueFrom, from, interval, mergeMap, reduce, ReplaySubject, takeUntil, toArray } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, from, interval, mergeMap, reduce, ReplaySubject, takeUntil, tap, toArray } from 'rxjs';
 import { DeviceMetadata } from './DeviceMetadata.js';
 import { Observable } from 'rxjs';
 import { ReadableDps } from './TuyaLocal.js';
+import { existsSync } from 'fs';
+import { DIR, TUYA_CLIENT_ID, TUYA_SCHEMA } from '../../const.js';
 
 
-const TUYA_CLIENT_ID = 'HA_3y9q4ak7g4ephrvke'
-const TUYA_SCHEMA = 'haauthorize'
+
 
 export type Dict = Record<string, any>
 
@@ -44,7 +45,7 @@ export type TuyaDeviceHomeMap = {
 
 export class TuyaCloud {
 
-    public readonly credential = new ReplaySubject<TuyaCredential>(1)
+    public readonly credential$ = new ReplaySubject<TuyaCredential>(1)
     public online$ = new BehaviorSubject(false)
     public readonly $stop = new ReplaySubject<void>(1)
 
@@ -93,8 +94,10 @@ export class TuyaCloud {
 
     static async login(usercode: string) {
         const task = await this.#getCredential(usercode)
+
         const next = async () => {
             const credential = await task.next()
+            await Bun.file(`${DIR}/credential.json`).write(JSON.stringify(credential, null, 2))
             return credential ? new this(credential) : null
         }
 
@@ -104,8 +107,8 @@ export class TuyaCloud {
         }
     }
 
-    constructor(config: TuyaCredential) {
-        this.credential.next(config)
+    constructor(private config: TuyaCredential) {
+        this.credential$.next(config)
         interval(100 * 60000).pipe(
             takeUntil(this.$stop),
             mergeMap(() => this.refresh())
@@ -180,7 +183,7 @@ export class TuyaCloud {
         params?: Dict,
         body?: Dict
     }) {
-        const credential = await firstValueFrom(this.credential)
+        const credential = await firstValueFrom(this.credential$)
         const rid = crypto.randomUUID();
         const md5 = crypto.createHash("md5");
         // @ts-ignore
@@ -224,14 +227,15 @@ export class TuyaCloud {
     async refresh() {
         if (this.#refreshing) return true
         this.#refreshing = true;
-        const credential = await firstValueFrom(this.credential)
+        const credential = await firstValueFrom(this.credential$)
+        await Bun.file(`${DIR}/credential.json`).write(JSON.stringify(credential, null, 2))
         try {
             const res = await this.request<{
                 accessToken: string
                 refreshToken: string
             }>({ path: `/v1.0/m/token/${credential.refresh_token}` });
             if (res.data) {
-                this.credential.next({
+                this.credential$.next({
                     ...credential,
                     access_token: res.data.accessToken,
                     refresh_token: res.data.refreshToken
@@ -276,11 +280,15 @@ export class TuyaCloud {
     }
 
 
-    async fetchAll() {
+    async fetchAll(cacheFirst: boolean) {
+        const path = `${DIR}/devices.json`
+        if (cacheFirst && existsSync(path)) {
+            const cache = await Bun.file(path).json() as { [userCode: string]: TuyaDeviceHomeMap }
+            const data = cache ? cache[this.config.usercode] : null
+            if (data) return data
+        }
         const homes = await this.listHomes()
         if (homes.length == 0) return { devices: {}, homes: {} } as TuyaDeviceHomeMap
-
-
         return await firstValueFrom(from(homes).pipe(
             mergeMap(async home => {
                 const all_devices = await this.listDevices(home.ownerId)
@@ -349,7 +357,13 @@ export class TuyaCloud {
                         ...c.devices
                     }
                 }
-            }, {} as TuyaDeviceHomeMap)
+            }, {} as TuyaDeviceHomeMap),
+            tap(async devices => {
+                const data = {
+                    [this.config.usercode]: devices
+                }
+                await Bun.file(path).write(JSON.stringify(data, null, 2))
+            })
         ))
     }
 
@@ -397,6 +411,21 @@ export class TuyaCloud {
             body: dps
         })
     }
+
+
+    static async initFromCache(userCode: string) {
+        const path = `${DIR}/credential.json`
+        if (existsSync(path)) {
+            const credential = await Bun.file(path).json() as TuyaCredential
+            if (credential.usercode == userCode) {
+                const client = new this(credential)
+                if (await client.refresh()) {
+                    return client
+                }
+            }
+        }
+    }
+
 
 
 }
