@@ -1,5 +1,5 @@
 name: Tuya2Matter
-version: "1.0.43"
+version: "1.0.44"
 slug: tuya2matter
 description: |
   Bridge Tuya devices into Matter using Bun.js.

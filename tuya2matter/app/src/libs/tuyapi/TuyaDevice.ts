@@ -60,7 +60,7 @@ export class TuyaDevice {
                                 ... this.$dps.value.state,
                                 ...dps
                             }
-                        }) 
+                        })
                         this.$status.getValue() != 'online' && this.$status.next('online')
                     }
                 }),
@@ -188,7 +188,7 @@ export class TuyaDevice {
 
     }
 
-    listenDps<T>(dp_code) {
+    listenDps<T>(dp_code: string) {
         const mapping = this.config.mapping[dp_code]
         if (!mapping) return EMPTY
         return this.$dps.pipe(
