@@ -195,8 +195,7 @@ export class TuyaLocal {
                 keepAliveInitialDelay: 5
             })).pipe(
                 mergeMap(socket => merge(
-                    fromEvent(socket, 'error').pipe(
-                        tap(e => console.log(e)),
+                    fromEvent(socket, 'error').pipe( 
                         map(() => null)
                     ),
                     fromEvent(socket, 'connect').pipe(map(() => socket))
