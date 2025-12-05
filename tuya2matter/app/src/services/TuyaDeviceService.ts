@@ -29,6 +29,7 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
             mergeMap($ => $.pipe(
                 map($ => ({ ...$, ...$.payload })),
                 exhaustMap(async $ => {
+
                     const device_id = $.gwId
                     if (this.#connections.has(device_id)) {
                         const connection = this.#connections.get(device_id)!
@@ -50,6 +51,10 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
                         filter(s => s == 'online')
                     ))
                     this.#connections.set(device_id, connection)
+                    const dev = homes.devices[$.gwId]
+                    if (dev && !dev.sub) {
+                        console.log(`Discovered Tuya device: ${dev.name}`)
+                    }
                     const devices = [
                         ...metadata.is_gateway ? [] : [new TuyaDevice({ ...metadata, ip: $.ip })],
                         ...subs ? subs.map(m => new TuyaDevice({ ...m, ip: $.ip })) : []

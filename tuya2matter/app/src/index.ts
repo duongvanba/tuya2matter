@@ -18,4 +18,4 @@ export class AppMoule { }
 
 
 const app = await NestFactory.create(AppMoule)
-await app.listen(13879) 
+await app.listen(process.env.PORT || 13879) 

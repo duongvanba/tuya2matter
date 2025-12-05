@@ -6,7 +6,7 @@ import { DeviceMetadata } from './DeviceMetadata.js';
 import { Observable } from 'rxjs';
 import { ReadableDps } from './TuyaLocal.js';
 import { existsSync } from 'fs';
-import { DIR, TUYA_CLIENT_ID, TUYA_SCHEMA } from '../../const.js';
+import { CREDENTIAL_PATH, DEVICES_PATH, DIR, TUYA_CLIENT_ID, TUYA_SCHEMA } from '../../const.js';
 
 
 
@@ -97,8 +97,10 @@ export class TuyaCloud {
 
         const next = async () => {
             const credential = await task.next()
-            await Bun.file(`${DIR}/credential.json`).write(JSON.stringify(credential, null, 2))
-            return credential ? new this(credential) : null
+            if (credential) {
+                await Bun.file(CREDENTIAL_PATH).write(JSON.stringify(credential, null, 2))
+                return new this(credential)
+            }
         }
 
         return {
@@ -222,32 +224,35 @@ export class TuyaCloud {
     }
 
 
-    #refreshing = false
+    #refreshing?: Promise<boolean>
     // ====== Token refresh ======s
-    async refresh() {
-        if (this.#refreshing) return true
-        this.#refreshing = true;
-        const credential = await firstValueFrom(this.credential$)
-        await Bun.file(`${DIR}/credential.json`).write(JSON.stringify(credential, null, 2))
-        try {
-            const res = await this.request<{
-                accessToken: string
-                refreshToken: string
-            }>({ path: `/v1.0/m/token/${credential.refresh_token}` });
-            if (res.data) {
-                this.credential$.next({
-                    ...credential,
-                    access_token: res.data.accessToken,
-                    refresh_token: res.data.refreshToken
-                })
-                return true
-            }
-        } catch (e: any) {
-            // giữ nguyên phong cách log ngắn gọn
-            console.error("network error on refresh =", e?.message ?? e);
+    refresh() {
+        if (!this.#refreshing) {
+            this.#refreshing = new Promise<boolean>(async s => {
+                const credential = await firstValueFrom(this.credential$)
+                try {
+                    const res = await this.request<{
+                        accessToken: string
+                        refreshToken: string
+                    }>({ path: `/v1.0/m/token/${credential.refresh_token}` });
+                    if (res.data) {
+                        const c = {
+                            ...credential,
+                            access_token: res.data.accessToken,
+                            refresh_token: res.data.refreshToken
+                        }
+                        this.credential$.next(c)
+                        await Bun.file(CREDENTIAL_PATH).write(JSON.stringify(c, null, 2))
+                        s(true)
+                    }
+                } catch (e: any) {
+                    // giữ nguyên phong cách log ngắn gọn
+                    console.error("network error on refresh =", e?.message ?? e);
+                }
+                s(false)
+            })
         }
-        this.#refreshing = false;
-        return false
+        return this.#refreshing
     }
 
 
@@ -281,9 +286,8 @@ export class TuyaCloud {
 
 
     async fetchAll(cacheFirst: boolean) {
-        const path = `${DIR}/devices.json`
-        if (cacheFirst && existsSync(path)) {
-            const cache = await Bun.file(path).json() as { [userCode: string]: TuyaDeviceHomeMap }
+        if (cacheFirst && existsSync(DEVICES_PATH)) {
+            const cache = await Bun.file(DEVICES_PATH).json() as { [userCode: string]: TuyaDeviceHomeMap }
             const data = cache ? cache[this.config.usercode] : null
             if (data) return data
         }
@@ -362,7 +366,7 @@ export class TuyaCloud {
                 const data = {
                     [this.config.usercode]: devices
                 }
-                await Bun.file(path).write(JSON.stringify(data, null, 2))
+                await Bun.file(DEVICES_PATH).write(JSON.stringify(data, null, 2))
             })
         ))
     }
@@ -414,14 +418,18 @@ export class TuyaCloud {
 
 
     static async initFromCache(userCode: string) {
-        const path = `${DIR}/credential.json`
-        if (existsSync(path)) {
-            const credential = await Bun.file(path).json() as TuyaCredential
-            if (credential && credential.usercode == userCode) {
-                const client = new this(credential)
-                if (await client.refresh()) {
-                    return client
+        if (existsSync(CREDENTIAL_PATH)) {
+            try {
+                const credential = await Bun.file(CREDENTIAL_PATH).json() as TuyaCredential
+                if (credential && credential.usercode == userCode) {
+                    const client = new this(credential)
+                    const ok = await client.refresh() 
+                    if (ok) {
+                        return client
+                    }
                 }
+            } catch (e) {
+
             }
         }
     }
