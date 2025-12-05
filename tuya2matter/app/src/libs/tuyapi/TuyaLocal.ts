@@ -1,9 +1,10 @@
-import { BehaviorSubject, Observable, ReplaySubject, Subject, filter, finalize, firstValueFrom, from, fromEvent, interval, map, merge, mergeAll, mergeMap, of, tap, timer } from 'rxjs'
+import { BehaviorSubject, Observable, ReplaySubject, Subject, filter, finalize, firstValueFrom, from, fromEvent, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, tap, timer } from 'rxjs'
 import dgram from 'dgram'
 import { createHash } from 'crypto'
 import { DeviceMetadata } from './DeviceMetadata.js'
 import { connect } from 'net'
 import { CommandType, MessageParser } from 'tuyapi/lib/message-parser.js'
+import { TUYA2MQTT_DEBUG } from '../../const.js'
 
 
 export type ApiCredential = {
@@ -100,7 +101,7 @@ export class TuyaLocal {
                     listener.close()
                 }
             })),
-            map(({ msg, rinfo }) => { 
+            map(({ msg, rinfo }) => {
                 for (const version of [3.3, 3.5]) {
                     try {
                         const parser = new MessageParser({
@@ -114,6 +115,33 @@ export class TuyaLocal {
             }),
             mergeAll()
         )
+    }
+
+    static async scan() {
+        const ips = new Set<string>()
+
+        await lastValueFrom(range(1, 255).pipe(
+
+            mergeMap(async i => {
+                const host = `192.168.2.${i}`
+                console.log(`Checking ${host}`)
+                const socket = connect({
+                    host: `192.168.2.${i}`,
+                    port: 6668,
+                    timeout: 1000
+                })
+                const connected = await firstValueFrom(merge(
+                    fromEvent(socket, 'connect').pipe(map(() => true)),
+                    fromEvent(socket, 'error').pipe(map(() => false)),
+                    fromEvent(socket, 'timeout').pipe(map(() => false))
+                ))
+                if (connected) {
+                    ips.add(host)
+                    console.log(`Found device at ${host}:6668`)
+                }
+                socket.destroy()
+            }, 10)
+        ))
     }
 
     #devices = new Map<string, BehaviorSubject<RawDps | undefined>>()
@@ -139,8 +167,8 @@ export class TuyaLocal {
         private cids: DeviceMetadata[] | false | null
     ) {
         this.#DEBUG = !!(
-            process.env.TUYA2MQTT_DEBUG == 'all'
-            || process.env.TUYA2MQTT_DEBUG?.includes(this.config.id)
+            TUYA2MQTT_DEBUG == 'all'
+            || TUYA2MQTT_DEBUG.includes(this.config.id)
         )
     }
 
@@ -167,7 +195,10 @@ export class TuyaLocal {
                 keepAliveInitialDelay: 5
             })).pipe(
                 mergeMap(socket => merge(
-                    fromEvent(socket, 'error').pipe(map(() => null)),
+                    fromEvent(socket, 'error').pipe(
+                        tap(e => console.log(e)),
+                        map(() => null)
+                    ),
                     fromEvent(socket, 'connect').pipe(map(() => socket))
                 ))
             )

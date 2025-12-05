@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { TuyaDevice } from "../libs/tuyapi/TuyaDevice.js";
-import { exhaustMap, filter, firstValueFrom, groupBy, map, mergeAll, mergeMap, ReplaySubject, Subject } from "rxjs";
+import { exhaustMap, filter, firstValueFrom, groupBy, map, mergeAll, mergeMap, ReplaySubject, Subject, tap } from "rxjs";
 import { TuyaLocal } from "../libs/tuyapi/TuyaLocal.js";
 import { TuyaCloud, TuyaDeviceHomeMap } from "../libs/tuyapi/TuyaCloud.js";
 import QrCode from 'qrcode-terminal'
@@ -23,8 +23,13 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
         this.start(homes)
     }
 
-    start(homes: TuyaDeviceHomeMap) {
-        TuyaLocal.watch().pipe(
+    async start(homes: TuyaDeviceHomeMap) {
+
+        // console.log('Scanning')
+        // await TuyaLocal.scan()
+        // return
+
+        TuyaLocal.watch().pipe( 
             groupBy($ => $.payload.gwId),
             mergeMap($ => $.pipe(
                 map($ => ({ ...$, ...$.payload })),
@@ -51,10 +56,7 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
                         filter(s => s == 'online')
                     ))
                     this.#connections.set(device_id, connection)
-                    const dev = homes.devices[$.gwId]
-                    if (dev && !dev.sub) {
-                        console.log(`Discovered Tuya device: ${dev.name}`)
-                    }
+                 
                     const devices = [
                         ...metadata.is_gateway ? [] : [new TuyaDevice({ ...metadata, ip: $.ip })],
                         ...subs ? subs.map(m => new TuyaDevice({ ...m, ip: $.ip })) : []
