@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { TuyaDevice } from "../libs/tuyapi/TuyaDevice.js";
-import { exhaustMap, filter, firstValueFrom, groupBy, map, mergeAll, mergeMap, ReplaySubject, Subject, tap } from "rxjs";
+import { exhaustMap, filter, firstValueFrom, groupBy, map, mergeAll, mergeMap, ReplaySubject, Subject, take, tap } from "rxjs";
 import { TuyaLocal } from "../libs/tuyapi/TuyaLocal.js";
 import { TuyaCloud, TuyaDeviceHomeMap } from "../libs/tuyapi/TuyaCloud.js";
 import QrCode from 'qrcode-terminal'
@@ -12,7 +12,6 @@ import { USER_CODE } from "../const.js";
 export class TuyaDeviceService extends Subject<TuyaDevice> {
 
     #connections = new Map<string, TuyaLocal>
-    #devices = new Set<string>
     public homes$ = new ReplaySubject(1)
 
 
@@ -29,43 +28,41 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
         // await TuyaLocal.scan()
         // return
 
-        TuyaLocal.watch().pipe( 
+        TuyaLocal.watch().pipe(
             groupBy($ => $.payload.gwId),
             mergeMap($ => $.pipe(
-                map($ => ({ ...$, ...$.payload })),
-                exhaustMap(async $ => {
-
-                    const device_id = $.gwId
-                    if (this.#connections.has(device_id)) {
-                        const connection = this.#connections.get(device_id)!
-                        connection.connect($)
-                        return []
+                map(({ payload: { gwId, ip, version } }) => {
+                    const metadata = homes.devices[gwId]
+                    if (metadata) {
+                        return {
+                            metadata,
+                            ip,
+                            version,
+                            device_id: metadata.id
+                        }
                     }
-                    const metadata = homes.devices[device_id]
-                    if (!metadata || this.#devices.has(metadata.id)) return []
+                }),
+                filter(Boolean),
+                exhaustMap(async ({ device_id, ip, metadata, version }) => {
 
-                    this.#devices.add(metadata.id)
-                    const subs = metadata.is_gateway ? (
-                        Object.values(homes.devices).filter(d => d.sub && d.gateway_id == metadata.id && !this.#devices.has(d.id))
-                    ) : null
-                    subs && subs.forEach(d => this.#devices.add(d.id))
+                    // Init connection or get from cache
+                    const sub_device_ids = metadata.is_gateway ? Object.values(homes.devices).filter(d => d.sub && d.gateway_id == metadata.id) : null
+                    const connection = this.#connections.get(device_id) || new TuyaLocal(metadata, sub_device_ids)
+                    await connection.connect({ ip, version })
 
-                    const connection = new TuyaLocal(metadata, subs)
-                    connection.connect($)
-                    await firstValueFrom(connection.$status.pipe(
-                        filter(s => s == 'online')
-                    ))
+                    // Setup for new device only
+                    if (this.#connections.has(device_id)) return []
                     this.#connections.set(device_id, connection)
-                 
                     const devices = [
-                        ...metadata.is_gateway ? [] : [new TuyaDevice({ ...metadata, ip: $.ip })],
-                        ...subs ? subs.map(m => new TuyaDevice({ ...m, ip: $.ip })) : []
+                        ...metadata.is_gateway ? [] : [new TuyaDevice({ ...metadata, ip })],
+                        ...sub_device_ids ? sub_device_ids.map(m => new TuyaDevice({ ...m, ip })) : []
                     ]
                     devices.forEach(d => d.linkLocal(connection))
                     return devices
                 }),
             )),
             mergeAll()
+
         ).subscribe(this)
     }
 

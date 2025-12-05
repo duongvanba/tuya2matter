@@ -195,7 +195,7 @@ export class TuyaLocal {
                 keepAliveInitialDelay: 5
             })).pipe(
                 mergeMap(socket => merge(
-                    fromEvent(socket, 'error').pipe( 
+                    fromEvent(socket, 'error').pipe(
                         map(() => null)
                     ),
                     fromEvent(socket, 'connect').pipe(map(() => socket))
@@ -303,6 +303,10 @@ export class TuyaLocal {
 
     connect(payload: Pick<DiscoverPayload, 'ip' | 'version'>) {
         this.#connect(payload)
+        return firstValueFrom(this.$status.pipe(
+            filter(s => s == 'online' || s == 'offline'),
+            map(s => s == 'online')
+        ))
     }
 
 
