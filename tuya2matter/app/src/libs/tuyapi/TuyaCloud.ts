@@ -417,7 +417,7 @@ export class TuyaCloud {
         const path = `${DIR}/credential.json`
         if (existsSync(path)) {
             const credential = await Bun.file(path).json() as TuyaCredential
-            if (credential.usercode == userCode) {
+            if (credential && credential.usercode == userCode) {
                 const client = new this(credential)
                 if (await client.refresh()) {
                     return client
