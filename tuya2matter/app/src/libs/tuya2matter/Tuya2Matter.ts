@@ -21,7 +21,8 @@ export class Tuya2Matter {
     constructor(
         public readonly aggregator: Endpoint<AggregatorEndpoint>,
         public readonly tuya: TuyaDevice
-    ) { }
+    ) {  
+    }
 
     #getMapper() {
         if (['kg', 'tdq', 'cz', 'znjdq', 'pc'].includes(this.tuya.category)) return new Tuya2MatterSwitch(this.aggregator, this.tuya)

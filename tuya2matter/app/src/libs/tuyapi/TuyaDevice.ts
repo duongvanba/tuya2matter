@@ -46,6 +46,7 @@ export class TuyaDevice {
     linkLocal(connection: TuyaLocal) {
         this.#local = connection
         const device_node_id = this.config.sub ? this.config.node_id : this.config.id
+
         return merge(
             // Dps sync 
             connection.registerDps(device_node_id).pipe(

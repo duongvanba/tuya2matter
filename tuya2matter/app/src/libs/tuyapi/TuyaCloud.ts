@@ -1,7 +1,7 @@
 
 import got from 'got';
 import * as crypto from "crypto";
-import { BehaviorSubject, firstValueFrom, from, interval, mergeMap, reduce, ReplaySubject, takeUntil, tap, toArray } from 'rxjs';
+import { BehaviorSubject, catchError, EMPTY, filter, firstValueFrom, from, interval, lastValueFrom, merge, mergeAll, mergeMap, of, reduce, ReplaySubject, retry, startWith, takeUntil, tap, toArray } from 'rxjs';
 import { DeviceMetadata } from './DeviceMetadata.js';
 import { Observable } from 'rxjs';
 import { ReadableDps } from './TuyaLocal.js';
@@ -285,90 +285,113 @@ export class TuyaCloud {
     }
 
 
-    async fetchAll(cacheFirst: boolean) {
-        if (cacheFirst && existsSync(DEVICES_PATH)) {
-            const cache = await Bun.file(DEVICES_PATH).json() as { [userCode: string]: TuyaDeviceHomeMap }
-            const data = cache ? cache[this.config.usercode] : null
-            if (data) return data
-        }
-        const homes = await this.listHomes()
-        if (homes.length == 0) return { devices: {}, homes: {} } as TuyaDeviceHomeMap
-        return await firstValueFrom(from(homes).pipe(
-            mergeMap(async home => {
-                const all_devices = await this.listDevices(home.ownerId)
-                const a = Date.now()
-                console.log({ found: home.name, devices: all_devices.length, status: 'checking' })
-                const list = await firstValueFrom(from(all_devices).pipe(
-                    mergeMap(async device => {
-                        const r = await this.getDeviceStatus(device.id)
-                        const mapping = r.dpStatusRelationDTOS.reduce((p, c) => {
-                            const m = {
-                                code: c.dpCode,
-                                dp_id: Number(c.dpId)
-                            }
-                            return {
-                                ...p,
-                                [Number(c.dpId)]: m,
-                                [c.dpCode]: m
-                            }
-                        }, {})
-                        const merged: DeviceMetadata = {
-                            ...device,
-                            mapping,
-                            home_id: home.ownerId
+    fetchAll() {
+        return merge(
+            of(1).pipe(
+                mergeMap(async () => {
+                    try {
+                        if (existsSync(DEVICES_PATH)) {
+                            const cache = await Bun.file(DEVICES_PATH).json() as { [userCode: string]: TuyaDeviceHomeMap }
+                            const data = cache ? cache[this.config.usercode] : null
+                            if (data) return data
                         }
-                        return merged
-                    }, 3),
-                    toArray()
-                ), { defaultValue: [] as DeviceMetadata[] })
-                console.log({
-                    home: home.name,
-                    devices: all_devices.length,
-                    status: 'done',
-                    time: Date.now() - a
-                })
-                const hubs = list.filter(
-                    c => !c.sub && ['wfcon', 'wg2'].includes(c.category)
-                ).reduce((p, c) => ({ ...p, [c.id]: c }), {} as { [id: string]: DeviceMetadata })
-
-                const devices = list.map(d => {
-                    const hub_ids = Object.keys(hubs)
-                    const gateway_id = d.sub && hub_ids.length == 1 ? hub_ids[0]! : null
-                    const is_gateway = !!hubs[d.id]
-                    return {
-                        ...d,
-                        gateway_id,
-                        is_gateway
-                    } as DeviceMetadata
-                }).reduce((p, c) => ({
-                    ...p,
-                    [c.id]: c
-                }), {})
-                return {
-                    home,
-                    devices,
-                    hubs
-                }
-            }, 1),
-            reduce((p, c) => {
-                return {
-                    homes: {
-                        ...p.homes,
-                        [c.home.id]: c.home
-                    },
-                    devices: {
-                        ...p.devices,
-                        ...c.devices
+                    } catch (e) {
+                        // ignore cache read error
                     }
-                }
-            }, {} as TuyaDeviceHomeMap),
-            tap(async devices => {
-                const data = {
-                    [this.config.usercode]: devices
-                }
-                await Bun.file(DEVICES_PATH).write(JSON.stringify(data, null, 2))
-            })
-        ))
+                }),
+                filter(Boolean)
+            ),
+            interval(12 * 60 * 60 * 1000).pipe(
+                startWith(0),
+                mergeMap(async () => {
+                    const homes = await this.listHomes()
+                    if (homes.length == 0) return { devices: {}, homes: {} } as TuyaDeviceHomeMap
+                    return lastValueFrom(from(homes).pipe(
+                        mergeMap(async home => {
+                            const all_devices = await this.listDevices(home.ownerId)
+                            const a = Date.now()
+                            console.log({ found: home.name, devices: all_devices.length, status: 'checking' })
+                            const list = await firstValueFrom(from(all_devices).pipe(
+                                mergeMap(async device => {
+                                    const r = await this.getDeviceStatus(device.id)
+                                    const mapping = r.dpStatusRelationDTOS.reduce((p, c) => {
+                                        const m = {
+                                            code: c.dpCode,
+                                            dp_id: Number(c.dpId)
+                                        }
+                                        return {
+                                            ...p,
+                                            [Number(c.dpId)]: m,
+                                            [c.dpCode]: m
+                                        }
+                                    }, {})
+                                    const merged: DeviceMetadata = {
+                                        ...device,
+                                        mapping,
+                                        home_id: home.ownerId
+                                    }
+                                    return merged
+                                }, 3),
+                                toArray()
+                            ), { defaultValue: [] as DeviceMetadata[] })
+                            console.log({
+                                home: home.name,
+                                devices: all_devices.length,
+                                status: 'done',
+                                time: Date.now() - a
+                            })
+                            const hubs = list.filter(
+                                c => !c.sub && ['wfcon', 'wg2'].includes(c.category)
+                            ).reduce((p, c) => ({ ...p, [c.id]: c }), {} as { [id: string]: DeviceMetadata })
+
+                            const devices = list.map(d => {
+                                const hub_ids = Object.keys(hubs)
+                                const gateway_id = d.sub && hub_ids.length == 1 ? hub_ids[0]! : null
+                                const is_gateway = !!hubs[d.id]
+                                return {
+                                    ...d,
+                                    gateway_id,
+                                    is_gateway
+                                } as DeviceMetadata
+                            }).reduce((p, c) => ({
+                                ...p,
+                                [c.id]: c
+                            }), {})
+                            return {
+                                home,
+                                devices,
+                                hubs
+                            }
+                        }, 1),
+                        reduce((p, c) => {
+                            return {
+                                homes: {
+                                    ...p.homes,
+                                    [c.home.id]: c.home
+                                },
+                                devices: {
+                                    ...p.devices,
+                                    ...c.devices
+                                }
+                            }
+                        }, {} as TuyaDeviceHomeMap),
+                        tap(async devices => {
+                            const data = {
+                                [this.config.usercode]: devices
+                            }
+                            await Bun.file(DEVICES_PATH).write(JSON.stringify(data, null, 2))
+                        }),
+                        catchError(e => EMPTY)
+                    ))
+                }),
+                retry({
+                    delay: 10 * 60000,
+                    resetOnSuccess: true
+                })
+            )
+        )
+
+
     }
 
     [Symbol.dispose]() {
@@ -423,7 +446,7 @@ export class TuyaCloud {
                 const credential = await Bun.file(CREDENTIAL_PATH).json() as TuyaCredential
                 if (credential && credential.usercode == userCode) {
                     const client = new this(credential)
-                    const ok = await client.refresh() 
+                    const ok = await client.refresh()
                     if (ok) {
                         return client
                     }

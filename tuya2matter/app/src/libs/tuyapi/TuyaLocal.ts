@@ -1,10 +1,11 @@
-import { BehaviorSubject, Observable, ReplaySubject, Subject, filter, finalize, firstValueFrom, from, fromEvent, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, tap, timer } from 'rxjs'
+import { BehaviorSubject, Observable, ReplaySubject, Subject, filter, finalize, firstValueFrom, from, fromEvent, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, tap, timer, toArray } from 'rxjs'
 import dgram from 'dgram'
 import { createHash } from 'crypto'
 import { DeviceMetadata } from './DeviceMetadata.js'
 import { connect } from 'net'
 import { CommandType, MessageParser } from 'tuyapi/lib/message-parser.js'
 import { TUYA2MQTT_DEBUG } from '../../const.js'
+import { execSync } from 'child_process'
 
 
 export type ApiCredential = {
@@ -32,6 +33,16 @@ export type RawDps = Partial<{
 }>
 
 export type ReadableDps = Partial<{
+    air_quality_index: string
+    air_quality_index: number
+    co2_value: number,
+    ch2o_value: number
+    pm25_value: number
+    pm1: number
+    pm10: number
+    charge_state: number
+    temp_current: number,
+    humidity_value: number
     residual_electricity: number
     doorcontact_state: boolean
     battery_percentage: number
@@ -84,7 +95,6 @@ export type CmdResponse = {
 
 export class TuyaLocal {
 
-
     static watch() {
 
         const ports = [6666, 6667, 6699, 7000]
@@ -113,35 +123,104 @@ export class TuyaLocal {
                 }
                 return []
             }),
-            mergeAll()
+            mergeAll(),
+            map(a => a.payload)
         )
     }
 
-    static async scan() {
-        const ips = new Set<string>()
+    static #listArpIps() {
+        return execSync(`arp -a`).toString().split('\n').map(line => {
+            const ip = line.split(' ')[1]?.replace('(', '').replace(')', '')
+            const mac = line.split(' ')[3]
+            if (ip && mac && mac.includes(':')) return { ip, mac }
+        }).filter(Boolean).map(a => a!)
+    }
 
-        await lastValueFrom(range(1, 255).pipe(
-
-            mergeMap(async i => {
-                const host = `192.168.2.${i}`
-                console.log(`Checking ${host}`)
-                const socket = connect({
-                    host: `192.168.2.${i}`,
-                    port: 6668,
-                    timeout: 1000
-                })
-                const connected = await firstValueFrom(merge(
-                    fromEvent(socket, 'connect').pipe(map(() => true)),
-                    fromEvent(socket, 'error').pipe(map(() => false)),
-                    fromEvent(socket, 'timeout').pipe(map(() => false))
+    static async #tcp({ ip, port = 6668 }: { ip: string, port?: number }) {
+        return await firstValueFrom(
+            of(connect({
+                host: ip,
+                port,
+                keepAlive: true,
+                keepAliveInitialDelay: 5
+            })).pipe(
+                mergeMap(socket => merge(
+                    fromEvent(socket, 'connect').pipe(map(() => socket)),
+                    merge(
+                        timer(5000),
+                        fromEvent(socket, 'error')
+                    ).pipe(
+                        tap(() => socket.destroy()),
+                        map(() => null)
+                    )
                 ))
-                if (connected) {
-                    ips.add(host)
-                    console.log(`Found device at ${host}:6668`)
-                }
-                socket.destroy()
-            }, 10)
-        ))
+            )
+        )
+    }
+
+    static scan(connections: Map<string, TuyaLocal>, devices: Record<string, DeviceMetadata>): Observable<DiscoverPayload> {
+        console.log('Scanning for Tuya devices in local network...')
+        const home_ids = new Set([...connections.values()].map(a => a.config.home_id))
+        const free_devices = Object.values(devices).filter(dev => {
+            if (dev.home_id && !home_ids.has(dev.home_id)) return false
+            if (connections.has(dev.id)) return false
+            if (dev.is_gateway) return true
+            if (dev.sub) return false
+            return true
+        })
+
+
+        return from(connections.values()).pipe(
+            mergeMap(async device => {
+                const { ip } = await firstValueFrom(device.metadata)
+                return { device, ip }
+            }),
+            toArray(),
+            mergeMap(list => {
+                const running_ips = new Set(list.map(i => i.ip))
+                const arp_ips = TuyaLocal.#listArpIps()
+                const free_ips = new Set(arp_ips.filter(a => !running_ips.has(a.ip)).map(a => a.ip))
+
+                return lastValueFrom(from(free_ips).pipe(
+                    mergeMap(async ip => {
+                        const connection = await TuyaLocal.#tcp({ ip })
+                        if (connection) {
+                            connection.destroy()
+                            return ip
+                        }
+                    }),
+                    filter(Boolean),
+                    toArray(),
+                    map(ips => new Set(ips as string[]))
+                ))
+            }),
+            mergeMap(free_ips => {
+
+                return from(free_devices).pipe( 
+                    mergeMap(async device => {
+                        const connection = new this(device, device.is_gateway ? [] : false, false)
+                        for (const ip of free_ips) {
+                            for (const version of ['3.5']) {
+                                const success = await connection.connect({ ip, version })
+                                connection.close()
+                                if (success) {
+                                    free_ips.delete(ip)
+                                    return {
+                                        gwId: device.id,
+                                        version,
+                                        ip
+                                    }
+                                }
+                            }
+                        }
+                    }, 1)
+                )
+            }),
+            filter(Boolean)
+        )
+
+
+
     }
 
     #devices = new Map<string, BehaviorSubject<RawDps | undefined>>()
@@ -158,23 +237,25 @@ export class TuyaLocal {
     }>
 
     #$metadata = new ReplaySubject<Pick<DiscoverPayload, 'ip' | 'version'>>(1)
-    public readonly stop$ = new ReplaySubject(1)
+    public readonly stop$ = new ReplaySubject<boolean>(1)
 
 
     #DEBUG = false
     constructor(
         public readonly config: Omit<DeviceMetadata, 'ip' | 'version'>,
-        private cids: DeviceMetadata[] | false | null
+        private cids: DeviceMetadata[] | false | null,
+        debug?: boolean
     ) {
-        this.#DEBUG = !!(
+        this.#DEBUG = debug === undefined ? !!(
             TUYA2MQTT_DEBUG == 'all'
             || TUYA2MQTT_DEBUG.includes(this.config.id)
-        )
+        ) : debug
     }
 
     #seq = 100
     async #connect({ ip, version }: Pick<DiscoverPayload, 'ip' | 'version'>) {
-        if (this.$status.getValue() == 'online' || this.$status.getValue() == 'connecting') return
+        if (this.$status.getValue() == 'online') return true
+        if (this.$status.getValue() == 'connecting') return false
         this.$status.next('connecting')
         this.#$metadata.next({ ip, version })
         this.#seq = 100
@@ -187,21 +268,7 @@ export class TuyaLocal {
         })
 
 
-        const socket = await firstValueFrom(
-            of(connect({
-                host: ip,
-                port: this.config.port || 6668,
-                keepAlive: true,
-                keepAliveInitialDelay: 5
-            })).pipe(
-                mergeMap(socket => merge(
-                    fromEvent(socket, 'error').pipe(
-                        map(() => null)
-                    ),
-                    fromEvent(socket, 'connect').pipe(map(() => socket))
-                ))
-            )
-        )
+        const socket = await TuyaLocal.#tcp({ ip })
         if (!socket) {
             this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> [ERROR] ${this.config.name} `)
             this.$status.next('offline')
@@ -255,7 +322,7 @@ export class TuyaLocal {
             this.#$request.pipe(
                 filter(e => !!e.payload.commandByte),
                 mergeMap(async ({ payload, sequenceN }) => {
-                    const cmd = Object.entries(CommandType).find(([k, v]) => v == payload.commandByte)
+                    Object.entries(CommandType).find(([k, v]) => v == payload.commandByte)
                     // this.#DEBUG && console.log({ send: cmd, ...payload, seq: sequenceN })
                     const buffer = parser.encode({
                         ...payload,
@@ -268,6 +335,7 @@ export class TuyaLocal {
             finalize(() => {
                 socket.end()
                 socket.destroy()
+                this.$status.next('offline')
             })
         ).subscribe()
 
@@ -276,8 +344,18 @@ export class TuyaLocal {
         this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> [SYNCING]    ${this.config.name} `)
         const decrypted = ['3.4', '3.5'].includes(version) ? await this.#negotiate(version, parser) : true
 
-        if (decrypted) {
-            await this.refresh()
+        if (!decrypted) {
+            console.error(`[${new Date().toLocaleString()}] [${ip}] <${this.config.id}> Can not setup 3.4 protocol`)
+            connection.unsubscribe()
+            return false
+        }
+        const ok = await this.refresh()
+        if (!ok) {
+            connection.unsubscribe()
+            return false
+        }
+
+        setImmediate(async () => {
             await firstValueFrom(merge(
                 interval(10000).pipe(
                     mergeMap(() => this.ping()),
@@ -291,14 +369,13 @@ export class TuyaLocal {
                 // Stop
                 this.stop$
             ))
-        } else {
-            console.error(`[${new Date().toLocaleString()}] [${ip}] <${this.config.id}> Can not setup 3.4 protocol`)
-        }
-        connection.unsubscribe()
-        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  OFFLINE`)
-        this.$status.next('offline')
-        await Bun.sleep(1000)
-        this.connect({ ip, version })
+            connection.unsubscribe()
+            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  OFFLINE`)
+            await Bun.sleep(1000)
+            this.connect({ ip, version })
+        })
+
+        return true
     }
 
     connect(payload: Pick<DiscoverPayload, 'ip' | 'version'>) {
@@ -458,7 +535,7 @@ export class TuyaLocal {
 
     async sync(sub_device_id?: string) {
         const { version } = await firstValueFrom(this.#$metadata)
-        const dps = await this.cmd({
+        const rs = await this.cmd({
             commandByte: version == '3.3' ? CommandType.DP_QUERY : CommandType.DP_QUERY_NEW,
             data: {
                 gwId: this.config.id,
@@ -469,7 +546,7 @@ export class TuyaLocal {
                 ...sub_device_id ? { cid: sub_device_id } : {}
             }
         }, 5000) as { dps?: any }
-        return dps
+        return rs?.dps || {}
     }
 
 
@@ -481,6 +558,10 @@ export class TuyaLocal {
 
     close() {
         this.stop$.next(true)
+    }
+
+    get metadata() {
+        return this.#$metadata
     }
 
 }
