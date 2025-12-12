@@ -33,7 +33,6 @@ export type RawDps = Partial<{
 }>
 
 export type ReadableDps = Partial<{
-    air_quality_index: string
     air_quality_index: number
     co2_value: number,
     ch2o_value: number
