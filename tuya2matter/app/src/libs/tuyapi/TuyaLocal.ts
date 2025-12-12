@@ -348,13 +348,10 @@ export class TuyaLocal {
             connection.unsubscribe()
             return false
         }
-        const ok = await this.refresh()
-        if (!ok) {
-            connection.unsubscribe()
-            return false
-        }
+       
 
         setImmediate(async () => {
+             await this.refresh()
             await firstValueFrom(merge(
                 interval(10000).pipe(
                     mergeMap(() => this.ping()),
