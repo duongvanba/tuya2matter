@@ -66,7 +66,7 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
                 })
             )),
             mergeAll(),
-            tap(device => device.name.includes('MT') && this.next(device))
+            tap(device => this.next(device))
         ))
     }
 
