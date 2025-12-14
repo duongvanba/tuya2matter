@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observable, ReplaySubject, Subject, filter, finalize, firstValueFrom, from, fromEvent, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, tap, timer, toArray } from 'rxjs'
+import { BehaviorSubject, EMPTY, Observable, ReplaySubject, Subject, catchError, filter, finalize, firstValueFrom, from, fromEvent, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, tap, timer, toArray } from 'rxjs'
 import dgram from 'dgram'
 import { createHash } from 'crypto'
 import { DeviceMetadata } from './DeviceMetadata.js'
@@ -135,26 +135,41 @@ export class TuyaLocal {
         }).filter(Boolean).map(a => a!)
     }
 
-    static async #tcp({ ip, port = 6668 }: { ip: string, port?: number }) {
-        return await firstValueFrom(
-            of(connect({
-                host: ip,
+    static async  #tcp({ ip, port = 6668 }: { ip: string, port?: number }) {
+        try {
+            const data$ = new Subject<Buffer>()
+            const socket = await Bun.connect({
+                hostname: ip,
                 port,
-                keepAlive: true,
-                keepAliveInitialDelay: 5
-            })).pipe(
-                mergeMap(socket => merge(
-                    fromEvent(socket, 'connect').pipe(map(() => socket)),
-                    merge(
-                        timer(5000),
-                        fromEvent(socket, 'error')
-                    ).pipe(
-                        tap(() => socket.end()),
-                        map(() => null)
-                    )
-                ))
-            )
-        )
+                socket: {
+                    data(socket, data) {
+                        data$.next(data)
+                    },
+                    open(socket) { },
+                    close(socket, error) {
+                        data$.complete()
+                    },
+                    drain(socket) { },
+                    error(socket, error) {
+                        data$.error(error)
+                    },
+
+                    connectError(socket, error) {
+                        data$.error(error)
+                    },
+                    end(socket) {
+                        data$.complete()
+                    },
+                    timeout(socket) {
+                        data$.error(new Error('Connection timed out'))
+                    },
+                },
+            })
+            if (!socket) return null
+            return Object.assign(socket, { data$ })
+        } catch (e) {
+            return null
+        }
     }
 
     static scan(connections: Map<string, TuyaLocal>, devices: Record<string, DeviceMetadata>): Observable<DiscoverPayload> {
@@ -275,11 +290,10 @@ export class TuyaLocal {
         }
         this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> [CONNECTED]  ${this.config.name}`)
 
-
         const connection = merge(
 
             // Map response
-            fromEvent(socket, 'data').pipe(
+            socket.data$.pipe(
                 map(data => {
                     try {
                         return parser.parse(data) as Array<CmdResponse>
@@ -337,6 +351,7 @@ export class TuyaLocal {
                 }, 1)
             )
         ).pipe(
+            catchError(() => EMPTY),
             finalize(() => {
                 socket.end()
                 this.$status.next('offline')
@@ -364,8 +379,9 @@ export class TuyaLocal {
                 ),
 
                 // Close
-                fromEvent(socket, 'close'),
-                fromEvent(socket, 'error'),
+                lastValueFrom(socket.data$.pipe(
+                    catchError(() => of(1))
+                )),
 
                 // Stop
                 this.stop$
