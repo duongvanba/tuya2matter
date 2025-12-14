@@ -1,6 +1,6 @@
 {
   "name": "tuya2matter",
-  "version": "1.0.54",
+  "version": "1.0.55",
   "license": "Apache-2.0",
   "dependencies": {
     "@matter/main": "^0.15.3",

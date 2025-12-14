@@ -21,6 +21,7 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
 
     start() {
         const cloudDevices$ = this.#getCloudClient().pipe(share())
+        const last_udp_broadcasts = new Map<string, number>()
 
         return lastValueFrom(merge(
             TuyaLocal.watch(),
@@ -28,7 +29,11 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
                 startWith(0),
                 switchMap(() => cloudDevices$),
                 delay(10000),
-                exhaustMap(homes => TuyaLocal.scan(this.#connections, homes.devices))
+                exhaustMap(homes => TuyaLocal.scan(this.#connections, homes.devices)),
+                filter(({ gwId }) => {
+                    const last_broadcast = last_udp_broadcasts.get(gwId) || 0
+                    return (Date.now() - last_broadcast) > 60000
+                })
             )
         ).pipe(
             withLatestFrom(cloudDevices$),
@@ -36,6 +41,7 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
             groupBy($ => $.payload.gwId),
             mergeMap($ => $.pipe(
                 map(({ payload: { gwId, ip, version }, homes }) => {
+                    last_udp_broadcasts.set(gwId, Date.now())
                     const metadata = homes.devices[gwId]
                     if (metadata) {
                         const sub_device_ids = metadata.is_gateway ? Object.values(homes.devices).filter(d => d.sub && d.gateway_id == metadata.id) : null

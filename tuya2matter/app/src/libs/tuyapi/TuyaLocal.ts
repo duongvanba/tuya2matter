@@ -149,7 +149,7 @@ export class TuyaLocal {
                         timer(5000),
                         fromEvent(socket, 'error')
                     ).pipe(
-                        tap(() => socket.destroy()),
+                        tap(() => socket.end()),
                         map(() => null)
                     )
                 ))
@@ -184,7 +184,7 @@ export class TuyaLocal {
                     mergeMap(async ip => {
                         const connection = await TuyaLocal.#tcp({ ip })
                         if (connection) {
-                            connection.destroy()
+                            connection.end()
                             return ip
                         }
                     }),
@@ -195,7 +195,7 @@ export class TuyaLocal {
             }),
             mergeMap(free_ips => {
 
-                return from(free_devices).pipe( 
+                return from(free_devices).pipe(
                     mergeMap(async device => {
                         const connection = new this(device, device.is_gateway ? [] : false, false)
                         for (const ip of free_ips) {
@@ -280,7 +280,13 @@ export class TuyaLocal {
 
             // Map response
             fromEvent(socket, 'data').pipe(
-                map(data => parser.parse(data) as Array<CmdResponse>),
+                map(data => {
+                    try {
+                        return parser.parse(data) as Array<CmdResponse>
+                    } catch (e) {
+                        return []
+                    }
+                }),
                 mergeAll(),
                 // tap(data => {
                 //     const cmd = Object.entries(CommandType).find(([, v]) => v == data.commandByte)
@@ -333,7 +339,6 @@ export class TuyaLocal {
         ).pipe(
             finalize(() => {
                 socket.end()
-                socket.destroy()
                 this.$status.next('offline')
             })
         ).subscribe()
@@ -344,14 +349,14 @@ export class TuyaLocal {
         const decrypted = ['3.4', '3.5'].includes(version) ? await this.#negotiate(version, parser) : true
 
         if (!decrypted) {
-            console.error(`[${new Date().toLocaleString()}] [${ip}] <${this.config.id}> Can not setup 3.4 protocol`)
+            console.error(`[${new Date().toLocaleString()}]     [${ip}] <${this.config.id}> Can not setup 3.4 protocol for ${this.config.name}`)
             connection.unsubscribe()
             return false
         }
-       
+
 
         setImmediate(async () => {
-             await this.refresh()
+            await this.refresh()
             await firstValueFrom(merge(
                 interval(10000).pipe(
                     mergeMap(() => this.ping()),
