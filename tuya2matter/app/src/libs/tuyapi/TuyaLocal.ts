@@ -222,7 +222,7 @@ export class TuyaLocal {
                             connection.end()
                             return ip
                         }
-                    }, 1),
+                    }, 5),
                     filter(Boolean),
                     toArray(),
                     map(ips => new Set(ips as string[]))
