@@ -20,60 +20,26 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
     }
 
     start() {
-        const cloudDevices$ = this.#getCloudClient().pipe(share())
-        const last_udp_broadcasts = new Map<string, number>()
 
-        return lastValueFrom(merge(
-            TuyaLocal.watch(),
-            interval(5 * 60000).pipe(
-                startWith(0),
-                switchMap(() => cloudDevices$),
-                delay(10000),
-                exhaustMap(homes => TuyaLocal.scan(this.#connections, homes.devices)),
-                filter(({ gwId }) => {
-                    const last_broadcast = last_udp_broadcasts.get(gwId) || 0
-                    return (Date.now() - last_broadcast) > 60000
+        return lastValueFrom(this.#getCloudClient().pipe(
+            switchMap(homes => merge(
+                TuyaLocal.watch(homes.devices),
+                interval(5 * 60000).pipe(
+                    startWith(0),
+                    delay(60000),
+                    exhaustMap(() => TuyaLocal.scan(this.#connections, homes.devices))
+                )
+            ).pipe(
+                mergeMap(connection => {
+                    const list = connection.config.is_gateway ? Object.values(homes.devices).filter(d => d.sub && d.gateway_id == connection.config.id) : [connection.config]
+                    return list.map(m => {
+                        const device = new TuyaDevice(m)
+                        device.linkLocal(connection)
+                        this.next(device)
+                    })
                 })
-            )
-        ).pipe(
-            withLatestFrom(cloudDevices$),
-            map(([payload, homes]) => ({ payload, homes })),
-            groupBy($ => $.payload.gwId),
-            mergeMap($ => $.pipe(
-                map(({ payload: { gwId, ip, version }, homes }) => {
-                    last_udp_broadcasts.set(gwId, Date.now())
-                    const metadata = homes.devices[gwId]
-                    if (metadata) {
-                        const sub_device_ids = metadata.is_gateway ? Object.values(homes.devices).filter(d => d.sub && d.gateway_id == metadata.id) : null
-                        return {
-                            metadata,
-                            ip,
-                            version,
-                            device_id: metadata.id,
-                            sub_device_ids
-                        }
-                    }
-                }),
-                filter(Boolean),
-                exhaustMap(async ({ device_id, ip, metadata, version, sub_device_ids }) => {
-                    // Init connection or get from cache
-                    const connection = this.#connections.get(device_id) || new TuyaLocal(metadata)
-                    await connection.connect({ ip, version })
-
-                    // Setup for new device only
-                    if (this.#connections.has(device_id)) return []
-                    this.#connections.set(device_id, connection)
-                    const devices = [
-                        ...metadata.is_gateway ? [] : [new TuyaDevice({ ...metadata, ip })],
-                        ...sub_device_ids ? sub_device_ids.map(m => new TuyaDevice({ ...m, ip })) : []
-                    ]
-                    devices.forEach(d => d.linkLocal(connection))
-                    return devices
-                })
-            )),
-            mergeAll(),
-            tap(device => this.next(device))
-        ))
+            ))
+        )) 
     }
 
 

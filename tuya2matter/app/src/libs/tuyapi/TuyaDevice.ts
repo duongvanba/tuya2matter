@@ -1,4 +1,4 @@
-import { BehaviorSubject, EMPTY, ReplaySubject, filter, finalize, map, merge, mergeMap, take, takeUntil, tap } from "rxjs";
+import { BehaviorSubject, EMPTY, ReplaySubject, Subscription, filter, finalize, map, merge, mergeMap, take, takeUntil, tap } from "rxjs";
 import { ConnectionStatusCode, RawDps, ReadableDps, TuyaLocal } from "./TuyaLocal.js";
 import { DeviceMetadata } from "./DeviceMetadata.js";
 import { TuyaCloud } from "./TuyaCloud.js";
@@ -14,8 +14,8 @@ export class TuyaDevice {
     })
     public readonly $status = new BehaviorSubject<ConnectionStatusCode>('created')
     #stop$ = new ReplaySubject(1)
-    #local?: TuyaLocal
-    #cloud?: TuyaCloud
+    #local?: Subscription & { connection: TuyaLocal }
+    #cloud?: Subscription & { connection: TuyaCloud }
 
 
     #toReadableDps(dps: RawDps) {
@@ -41,13 +41,12 @@ export class TuyaDevice {
     }
 
 
-    constructor(public readonly config: DeviceMetadata) { }
+    constructor(public readonly config: Omit<DeviceMetadata, 'ip' | 'version'>) { }
 
     linkLocal(connection: TuyaLocal) {
-        this.#local = connection
+        this.#local?.unsubscribe()
         const device_node_id = this.config.sub ? this.config.node_id : this.config.id
-
-        return merge(
+        const sub = merge(
             // Dps sync 
             connection.registerDps(device_node_id).pipe(
                 filter(Boolean),
@@ -106,17 +105,19 @@ export class TuyaDevice {
                 tap(dev => this.$status.next(dev.online ? 'online' : 'offline'))
             )
         ).pipe(
-            takeUntil(this.#stop$),
-            takeUntil(connection.stop$),
+            takeUntil(this.#stop$), 
             finalize(() => {
                 this.#local = undefined
                 this.#recheck()
             })
         ).subscribe()
+        this.#local = Object.assign(sub, { connection })
+        return this.#local
     }
 
     linkCloud(cloud: TuyaCloud) {
-        return merge(
+        this.#cloud?.unsubscribe()
+        const sub = merge(
 
             // Sync remote dps to local
             cloud.watch(this.config.id).pipe(
@@ -131,15 +132,19 @@ export class TuyaDevice {
                 this.#recheck()
             })
         ).subscribe()
+
+
+        this.#cloud = Object.assign(sub, { connection: cloud })
+        return this.#cloud
     }
 
     #recheck() {
-        const local = this.#local ? (this.#local.$status.getValue() == 'online') : false
-        const cloud = this.#cloud ? this.#cloud.online$.getValue() : false
+        // const local = this.#local ? (this.#local.$status.getValue() == 'online') : false
+        // const cloud = this.#cloud ? this.#cloud.online$.getValue() : false
 
-        if (!cloud && !local) {
-            this.$status.next('offline')
-        }
+        // if (!cloud && !local) {
+        //     this.$status.next('offline')
+        // }
     }
 
     get mapping() {
@@ -168,8 +173,8 @@ export class TuyaDevice {
         if (Object.entries(dps).every(([code, v]) => v == this.$dps.value.state[code])) return
 
         if (this.#local) {
-            if (this.#local.$status.value == 'online') {
-                await this.#local.setDps(
+            if (this.#local.connection.$status.value == 'online') {
+                await this.#local.connection.setDps(
                     this.#toRawDps(dps),
                     this.config.sub ? this.config.node_id : undefined
                 )
@@ -185,7 +190,7 @@ export class TuyaDevice {
             }
             return
         }
-        await this.#cloud?.sendCommand(this.config.id, this.#toReadableDps(dps))
+        await this.#cloud?.connection.sendCommand(this.config.id, this.#toReadableDps(dps))
 
     }
 

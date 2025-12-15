@@ -1,4 +1,4 @@
-import { BehaviorSubject, EMPTY, Observable, ReplaySubject, Subject, catchError, delay, filter, finalize, firstValueFrom, from, fromEvent, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, tap, timer, toArray } from 'rxjs'
+import { BehaviorSubject, EMPTY, Observable, ReplaySubject, Subject, catchError, delay, exhaustMap, filter, finalize, firstValueFrom, from, fromEvent, groupBy, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, tap, timer, toArray } from 'rxjs'
 import dgram from 'dgram'
 import { createHash } from 'crypto'
 import { DeviceMetadata } from './DeviceMetadata.js'
@@ -94,7 +94,8 @@ export type CmdResponse = {
 
 export class TuyaLocal {
 
-    static watch() {
+    static #connections = new Map<string, TuyaLocal>
+    static watch(devices: Record<string, DeviceMetadata>) {
 
         const ports = [6666, 6667, 6699, 7000]
 
@@ -123,7 +124,21 @@ export class TuyaLocal {
                 return []
             }),
             mergeAll(),
-            map(a => a.payload)
+            map(a => a.payload),
+            groupBy(payload => payload.gwId),
+            mergeMap($ => $.pipe(
+                exhaustMap(async payload => {
+                    const metadata = devices[payload.gwId] 
+                    if (!metadata) return
+                    const connection = this.#connections.get(metadata.id) || new this(metadata)
+                    const success = await connection.connect(payload)
+                    if (success && !this.#connections.has(metadata.id)) {
+                        this.#connections.set(metadata.id, connection)
+                        return connection
+                    }
+                }),
+            )),
+            filter(Boolean)
         )
     }
 
@@ -172,7 +187,7 @@ export class TuyaLocal {
         }
     }
 
-    static scan(connections: Map<string, TuyaLocal>, devices: Record<string, DeviceMetadata>): Observable<DiscoverPayload> {
+    static scan(connections: Map<string, TuyaLocal>, devices: Record<string, DeviceMetadata>) {
         console.log('Scanning for Tuya devices in local network...')
         const home_ids = new Set([...connections.values()].map(a => a.config.home_id))
         const free_devices = Object.values(devices).filter(dev => {
@@ -218,28 +233,19 @@ export class TuyaLocal {
                 })
                 return from(free_devices).pipe(
                     mergeMap(async device => {
-                        using connection = new this(device, false)
+                        const connection = this.#connections.get(device.id) || new this(device)
+                        if (connection.$status.value == 'online') return
                         for (const ip of free_ips) {
-                            // console.log(`Trying to connect to device ${device.name} to ${ip}...`)
-                            for (const version of ['3.5']) {
-                                const success = await connection.connect({ ip, version })
-                                if (success) {
-                                    free_ips.delete(ip)
-                                    return {
-                                        gwId: device.id,
-                                        version,
-                                        ip
-                                    }
-                                } else {
-                                    // console.log(`Failed to connect to device ${device.name} to ${ip} with version ${version}.`)
-                                }
+                            const success = await connection.connect({ ip, version: '3.5' })
+                            if (success && !this.#connections.has(device.id)) {
+                                this.#connections.set(device.id, connection)
+                                return connection
                             }
                         }
                     }, 1)
                 )
             }),
-            filter(Boolean),
-            delay(1000)
+            filter(Boolean)
         )
 
 
@@ -265,10 +271,9 @@ export class TuyaLocal {
 
     #DEBUG = false
     constructor(
-        public readonly config: Omit<DeviceMetadata, 'ip' | 'version'>,
-        debug?: boolean
+        public readonly config: Omit<DeviceMetadata, 'ip' | 'version'> 
     ) {
-        this.#DEBUG = debug != undefined ? debug : !!(
+        this.#DEBUG =  !!(
             TUYA2MQTT_DEBUG == 'all'
             || TUYA2MQTT_DEBUG.includes(this.config.id)
         )
@@ -560,7 +565,7 @@ export class TuyaLocal {
         })
     }
 
-    async sync(sub_device_id?: string) {
+    async sync(sub_device_id: string) {
         const { version } = await firstValueFrom(this.#$metadata)
         const rs = await this.cmd({
             commandByte: version == '3.3' ? CommandType.DP_QUERY : CommandType.DP_QUERY_NEW,
@@ -570,14 +575,14 @@ export class TuyaLocal {
                 t: Math.round(new Date().getTime() / 1000),
                 dps: {},
                 uid: this.config.id,
-                ...sub_device_id ? { cid: sub_device_id } : {}
+                ...sub_device_id && sub_device_id != this.config.id ? { cid: sub_device_id } : {}
             }
         }, 5000) as { dps?: any }
         return rs?.dps || {}
     }
 
 
-    registerDps(id: string) {
+    registerDps(id: string) { 
         const $dps = this.#devices.get(id) || new BehaviorSubject<RawDps | undefined>(undefined)
         !this.#devices.has(id) && this.#devices.set(id, $dps)
         return $dps
