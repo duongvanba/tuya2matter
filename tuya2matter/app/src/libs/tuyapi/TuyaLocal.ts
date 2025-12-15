@@ -297,7 +297,7 @@ export class TuyaLocal {
                 map(data => {
                     try {
                         return parser.parse(data) as Array<CmdResponse>
-                    } catch (e) {
+                    } catch (e) { 
                         return []
                     }
                 }),
@@ -309,7 +309,7 @@ export class TuyaLocal {
                 //         ...data
                 //     })
                 // }),
-                mergeMap(async data => {
+                mergeMap(async data => { 
                     const just_online = this.$status.getValue() != 'online'
                     this.#seq = Math.max(this.#seq, data.sequenceN)
                     const p = data.payload as { dps: RawDps, cid: string }
@@ -332,7 +332,7 @@ export class TuyaLocal {
                     this.#$response.next(data)
                     just_online && setTimeout(() => {
                         this.$status.next('online')
-                        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}> [STREAMING]  ${this.config.name} `)
+                        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]     [${ip}] <${this.config.id}> [STREAMING]  ${this.config.name} `)
                     }, 1000)
                 })
             ),
@@ -353,7 +353,7 @@ export class TuyaLocal {
         ).pipe(
             catchError(() => EMPTY),
             finalize(() => {
-                socket.end()
+                socket.close() 
                 this.$status.next('offline')
             })
         ).subscribe()

@@ -53,6 +53,7 @@ export class TuyaDevice {
                 filter(Boolean),
                 map(dps => this.#toReadableDps(dps)),
                 tap(dps => {
+                    this.$status.getValue() != 'online' && this.$status.next('online')
                     if (Object.keys(dps).length > 0) {
                         this.$dps.next({
                             ... this.$dps.value,
@@ -62,7 +63,6 @@ export class TuyaDevice {
                                 ...dps
                             }
                         })
-                        this.$status.getValue() != 'online' && this.$status.next('online')
                     }
                 }),
 

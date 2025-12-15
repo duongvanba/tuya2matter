@@ -66,7 +66,7 @@ export class Tuya2MatterFan {
             mergeMap(async dps => {
                 const { fan_speed, light } = dps
 
-                dps.switch === false && endpoint.set({
+                dps.switch != true && endpoint.set({
                     fanControl: {
                         fanMode: 0,
                         percentCurrent: 0,
