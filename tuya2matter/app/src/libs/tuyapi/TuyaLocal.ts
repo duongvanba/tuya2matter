@@ -128,7 +128,7 @@ export class TuyaLocal {
             groupBy(payload => payload.gwId),
             mergeMap($ => $.pipe(
                 exhaustMap(async payload => {
-                    const metadata = devices[payload.gwId] 
+                    const metadata = devices[payload.gwId]
                     if (!metadata) return
                     const connection = this.#connections.get(metadata.id) || new this(metadata)
                     const success = await connection.connect(payload)
@@ -187,20 +187,22 @@ export class TuyaLocal {
         }
     }
 
-    static scan(connections: Map<string, TuyaLocal>, devices: Record<string, DeviceMetadata>) {
+    static scan(devices: Record<string, DeviceMetadata>) {
         console.log('Scanning for Tuya devices in local network...')
-        const home_ids = new Set([...connections.values()].map(a => a.config.home_id))
+        const home_ids = new Set([...this.#connections.values()].map(a => a.config.home_id))
         const free_devices = Object.values(devices).filter(dev => {
             if (dev.home_id && !home_ids.has(dev.home_id)) return false
-            const connection = connections.get(dev.id)
+            const connection = this.#connections.get(dev.id)
             if (connection && connection.$status.value == 'online') return false
             if (dev.is_gateway) return true
             if (dev.sub) return false
             return true
         })
 
+        console.log({ homes: home_ids.size, free_devices: free_devices.length })
 
-        return from(connections.values()).pipe(
+
+        return from(this.#connections.values()).pipe(
             mergeMap(async device => {
                 const { ip } = await firstValueFrom(device.metadata)
                 return { device, ip }
@@ -220,7 +222,7 @@ export class TuyaLocal {
                             connection.end()
                             return ip
                         }
-                    }),
+                    }, 1),
                     filter(Boolean),
                     toArray(),
                     map(ips => new Set(ips as string[]))
@@ -271,9 +273,9 @@ export class TuyaLocal {
 
     #DEBUG = false
     constructor(
-        public readonly config: Omit<DeviceMetadata, 'ip' | 'version'> 
+        public readonly config: Omit<DeviceMetadata, 'ip' | 'version'>
     ) {
-        this.#DEBUG =  !!(
+        this.#DEBUG = !!(
             TUYA2MQTT_DEBUG == 'all'
             || TUYA2MQTT_DEBUG.includes(this.config.id)
         )
@@ -582,7 +584,7 @@ export class TuyaLocal {
     }
 
 
-    registerDps(id: string) { 
+    registerDps(id: string) {
         const $dps = this.#devices.get(id) || new BehaviorSubject<RawDps | undefined>(undefined)
         !this.#devices.has(id) && this.#devices.set(id, $dps)
         return $dps

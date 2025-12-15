@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { TuyaDevice } from "../libs/tuyapi/TuyaDevice.js";
-import { delay, exhaustMap, filter, from, groupBy, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, ReplaySubject, share, startWith, Subject, switchMap, tap, withLatestFrom } from "rxjs";
+import { debounce, debounceTime, delay, exhaustMap, filter, from, groupBy, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, ReplaySubject, share, startWith, Subject, switchMap, tap, withLatestFrom } from "rxjs";
 import { TuyaLocal } from "../libs/tuyapi/TuyaLocal.js";
 import { TuyaCloud } from "../libs/tuyapi/TuyaCloud.js";
 import QrCode from 'qrcode-terminal'
@@ -20,14 +20,13 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
     }
 
     start() {
-
         return lastValueFrom(this.#getCloudClient().pipe(
             switchMap(homes => merge(
                 TuyaLocal.watch(homes.devices),
                 interval(5 * 60000).pipe(
                     startWith(0),
-                    delay(60000),
-                    exhaustMap(() => TuyaLocal.scan(this.#connections, homes.devices))
+                    delay(20000),
+                    exhaustMap(() => TuyaLocal.scan(homes.devices))
                 )
             ).pipe(
                 mergeMap(connection => {
@@ -39,7 +38,7 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
                     })
                 })
             ))
-        )) 
+        ))
     }
 
 

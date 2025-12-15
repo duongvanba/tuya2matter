@@ -13,7 +13,7 @@ export class TuyaDevice {
         pending: {}
     })
     public readonly $status = new BehaviorSubject<ConnectionStatusCode>('created')
-    #stop$ = new ReplaySubject(1)
+    #stop$ = new BehaviorSubject<boolean>(false)
     #local?: Subscription & { connection: TuyaLocal }
     #cloud?: Subscription & { connection: TuyaCloud }
 
@@ -105,7 +105,7 @@ export class TuyaDevice {
                 tap(dev => this.$status.next(dev.online ? 'online' : 'offline'))
             )
         ).pipe(
-            takeUntil(this.#stop$), 
+            takeUntil(this.#stop$.pipe(filter(v => v))), 
             finalize(() => {
                 this.#local = undefined
                 this.#recheck()
