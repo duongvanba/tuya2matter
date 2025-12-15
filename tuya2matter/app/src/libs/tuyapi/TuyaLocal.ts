@@ -195,6 +195,11 @@ export class TuyaLocal {
                 const arp_ips = TuyaLocal.#listArpIps()
                 const free_ips = new Set(arp_ips.filter(a => !running_ips.has(a.ip)).map(a => a.ip))
 
+                console.log({
+                    offline_devices: free_devices.map(a => a.name),
+                    free_ips: Array.from(free_ips)
+                })
+
                 return lastValueFrom(from(free_ips).pipe(
                     mergeMap(async ip => {
                         const connection = await TuyaLocal.#tcp({ ip })
@@ -297,7 +302,7 @@ export class TuyaLocal {
                 map(data => {
                     try {
                         return parser.parse(data) as Array<CmdResponse>
-                    } catch (e) { 
+                    } catch (e) {
                         return []
                     }
                 }),
@@ -309,7 +314,7 @@ export class TuyaLocal {
                 //         ...data
                 //     })
                 // }),
-                mergeMap(async data => { 
+                mergeMap(async data => {
                     const just_online = this.$status.getValue() != 'online'
                     this.#seq = Math.max(this.#seq, data.sequenceN)
                     const p = data.payload as { dps: RawDps, cid: string }
@@ -353,7 +358,7 @@ export class TuyaLocal {
         ).pipe(
             catchError(() => EMPTY),
             finalize(() => {
-                socket.close() 
+                socket.close()
                 this.$status.next('offline')
             })
         ).subscribe()
