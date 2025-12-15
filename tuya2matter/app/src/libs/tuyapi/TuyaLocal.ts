@@ -1,4 +1,4 @@
-import { BehaviorSubject, EMPTY, Observable, ReplaySubject, Subject, catchError, filter, finalize, firstValueFrom, from, fromEvent, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, tap, timer, toArray } from 'rxjs'
+import { BehaviorSubject, EMPTY, Observable, ReplaySubject, Subject, catchError, delay, filter, finalize, firstValueFrom, from, fromEvent, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, tap, timer, toArray } from 'rxjs'
 import dgram from 'dgram'
 import { createHash } from 'crypto'
 import { DeviceMetadata } from './DeviceMetadata.js'
@@ -177,7 +177,8 @@ export class TuyaLocal {
         const home_ids = new Set([...connections.values()].map(a => a.config.home_id))
         const free_devices = Object.values(devices).filter(dev => {
             if (dev.home_id && !home_ids.has(dev.home_id)) return false
-            if (connections.has(dev.id)) return false
+            const connection = connections.get(dev.id)
+            if (connection && connection.$status.value == 'online') return false
             if (dev.is_gateway) return true
             if (dev.sub) return false
             return true
@@ -195,10 +196,7 @@ export class TuyaLocal {
                 const arp_ips = TuyaLocal.#listArpIps()
                 const free_ips = new Set(arp_ips.filter(a => !running_ips.has(a.ip)).map(a => a.ip))
 
-                console.log({
-                    offline_devices: free_devices.map(a => a.name),
-                    free_ips: Array.from(free_ips)
-                })
+
 
                 return lastValueFrom(from(free_ips).pipe(
                     mergeMap(async ip => {
@@ -214,14 +212,17 @@ export class TuyaLocal {
                 ))
             }),
             mergeMap(free_ips => {
-
+                console.log({
+                    offline_devices: free_devices.map(a => a.name),
+                    free_ips: Array.from(free_ips)
+                })
                 return from(free_devices).pipe(
                     mergeMap(async device => {
-                        const connection = new this(device, device.is_gateway ? [] : false, false)
+                        using connection = new this(device, false)
                         for (const ip of free_ips) {
+                            // console.log(`Trying to connect to device ${device.name} to ${ip}...`)
                             for (const version of ['3.5']) {
                                 const success = await connection.connect({ ip, version })
-                                connection.close()
                                 if (success) {
                                     free_ips.delete(ip)
                                     return {
@@ -229,13 +230,16 @@ export class TuyaLocal {
                                         version,
                                         ip
                                     }
+                                } else {
+                                    // console.log(`Failed to connect to device ${device.name} to ${ip} with version ${version}.`)
                                 }
                             }
                         }
                     }, 1)
                 )
             }),
-            filter(Boolean)
+            filter(Boolean),
+            delay(1000)
         )
 
 
@@ -256,23 +260,23 @@ export class TuyaLocal {
     }>
 
     #$metadata = new ReplaySubject<Pick<DiscoverPayload, 'ip' | 'version'>>(1)
-    public readonly stop$ = new ReplaySubject<boolean>(1)
+    public readonly stop$ = new BehaviorSubject(false)
 
 
     #DEBUG = false
     constructor(
         public readonly config: Omit<DeviceMetadata, 'ip' | 'version'>,
-        private cids: DeviceMetadata[] | false | null,
         debug?: boolean
     ) {
-        this.#DEBUG = debug === undefined ? !!(
+        this.#DEBUG = debug != undefined ? debug : !!(
             TUYA2MQTT_DEBUG == 'all'
             || TUYA2MQTT_DEBUG.includes(this.config.id)
-        ) : debug
+        )
     }
 
     #seq = 100
     async #connect({ ip, version }: Pick<DiscoverPayload, 'ip' | 'version'>) {
+        this.stop$.next(false)
         if (this.$status.getValue() == 'online') return true
         if (this.$status.getValue() == 'connecting') return false
         this.$status.next('connecting')
@@ -384,12 +388,13 @@ export class TuyaLocal {
                 ),
 
                 // Close
-                lastValueFrom(socket.data$.pipe(
+                socket.data$.pipe(
+                    filter(() => false),
                     catchError(() => of(1))
-                )),
+                ),
 
                 // Stop
-                this.stop$
+                this.stop$.pipe(filter(Boolean))
             ))
             connection.unsubscribe()
             this.#DEBUG && console.log(`[${new Date().toLocaleString()}]    [${ip}] <${this.config.id}>  ${this.config.name}:  OFFLINE`)
@@ -580,6 +585,10 @@ export class TuyaLocal {
 
     close() {
         this.stop$.next(true)
+    }
+
+    [Symbol.dispose]() {
+        this.close()
     }
 
     get metadata() {

@@ -57,7 +57,7 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
                 filter(Boolean),
                 exhaustMap(async ({ device_id, ip, metadata, version, sub_device_ids }) => {
                     // Init connection or get from cache
-                    const connection = this.#connections.get(device_id) || new TuyaLocal(metadata, sub_device_ids)
+                    const connection = this.#connections.get(device_id) || new TuyaLocal(metadata)
                     await connection.connect({ ip, version })
 
                     // Setup for new device only
