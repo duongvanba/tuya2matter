@@ -153,33 +153,36 @@ export class TuyaLocal {
     static async  #tcp({ ip, port = 6668 }: { ip: string, port?: number }) {
         try {
             const data$ = new Subject<Buffer>()
-            const socket = await Bun.connect({
-                hostname: ip,
-                port,
-                socket: {
-                    data(socket, data) {
-                        data$.next(data)
-                    },
-                    open(socket) { },
-                    close(socket, error) {
-                        data$.complete()
-                    },
-                    drain(socket) { },
-                    error(socket, error) {
-                        data$.error(error)
-                    },
+            const socket = await Promise.race([
+                Bun.sleep(3000),
+                Bun.connect({
+                    hostname: ip,
+                    port,
+                    socket: {
+                        data(socket, data) {
+                            data$.next(data)
+                        },
+                        open(socket) { },
+                        close(socket, error) {
+                            data$.complete()
+                        },
+                        drain(socket) { },
+                        error(socket, error) {
+                            data$.error(error)
+                        },
 
-                    connectError(socket, error) {
-                        data$.error(error)
+                        connectError(socket, error) {
+                            data$.error(error)
+                        },
+                        end(socket) {
+                            data$.complete()
+                        },
+                        timeout(socket) {
+                            data$.error(new Error('Connection timed out'))
+                        },
                     },
-                    end(socket) {
-                        data$.complete()
-                    },
-                    timeout(socket) {
-                        data$.error(new Error('Connection timed out'))
-                    },
-                },
-            })
+                })
+            ])
             if (!socket) return null
             return Object.assign(socket, { data$ })
         } catch (e) {
