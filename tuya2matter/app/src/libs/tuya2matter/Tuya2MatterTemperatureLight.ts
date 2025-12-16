@@ -60,7 +60,7 @@ export class Tuya2MatterTemperatureLight {
         )
 
         const observable = this.tuya.$dps.pipe(
-            map(d => d.state),
+            map(d => d.last),
             mergeMap(async dps => {
                 const temp_value = dps.temp_value
                 const bright_value = dps.bright_value

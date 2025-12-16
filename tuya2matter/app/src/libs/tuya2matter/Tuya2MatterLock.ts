@@ -58,7 +58,7 @@ export class Tuya2MatterLock {
         )
 
         const observable = this.tuya.$dps.pipe(
-            map(d => d.state),
+            map(d => d.last),
             mergeMap(async dps => {
                 endpoint.set({
                     doorLock: {

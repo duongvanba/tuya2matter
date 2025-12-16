@@ -124,7 +124,7 @@ export class TuyaLocal {
                 return []
             }),
             mergeAll(),
-            map(a => a.payload),
+            map(a => a.payload), 
             groupBy(payload => payload.gwId),
             mergeMap($ => $.pipe(
                 exhaustMap(async payload => {
@@ -159,7 +159,7 @@ export class TuyaLocal {
                     hostname: ip,
                     port,
                     socket: {
-                        data(socket, data) {
+                        data(socket, data) { 
                             data$.next(data)
                         },
                         open(socket) { },
@@ -193,10 +193,11 @@ export class TuyaLocal {
     static scan(devices: Record<string, DeviceMetadata>) {
         console.log('Scanning for Tuya devices in local network...')
         const home_ids = new Set([...this.#connections.values()].map(a => a.config.home_id))
-        const free_devices = Object.values(devices).filter(dev => {
+        const free_devices = Object.values(devices).filter(dev => { 
             if (dev.home_id && !home_ids.has(dev.home_id)) return false
             const connection = this.#connections.get(dev.id)
             if (connection && connection.$status.value == 'online') return false
+            if(!dev.online) return false
             if (dev.is_gateway) return true
             if (dev.sub) return false
             return true

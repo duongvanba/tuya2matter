@@ -93,7 +93,7 @@ export class Tuya2MatterSwitch {
 
 
             const observable = tuya.$dps.pipe(
-                map(d => d.state),
+                map(d => d.last),
                 tap(dps => {
                     Object.entries(dps).forEach(([key, on]) => {
                         if (SWITCH_CODES.includes(key)) {

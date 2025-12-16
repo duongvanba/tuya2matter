@@ -74,7 +74,7 @@ export class Tuya2MatterCover {
 
 
         const observable = this.tuya.$dps.pipe(
-            map(d => d.state),
+            map(d => d.last),
             mergeMap(async dps => {
                 if (dps.percent_control != undefined) {
                     const targetPositionLiftPercent100ths = Number(dps.percent_control) * 100
