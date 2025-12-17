@@ -6,6 +6,8 @@ import { connect } from 'net'
 import { CommandType, MessageParser } from 'tuyapi/lib/message-parser.js'
 import { TUYA2MQTT_DEBUG } from '../../const.js'
 import { execSync } from 'child_process'
+import { LimitConcurrency } from '../../helpers/LimitConcurrency.js'
+import { TuyaDeviceHomeMap } from './TuyaCloud.js'
 
 
 export type ApiCredential = {
@@ -94,7 +96,9 @@ export type CmdResponse = {
 
 export class TuyaLocal {
 
-    static #connections = new Map<string, TuyaLocal>
+    static #connections = new Map<string, TuyaLocal>()
+
+
     static watch(devices: Record<string, DeviceMetadata>) {
 
         const ports = [6666, 6667, 6699, 7000]
@@ -185,7 +189,7 @@ export class TuyaLocal {
             return true
         })
 
-        console.log({ homes: home_ids.size, free_devices: free_devices.length })
+
 
 
         return from(this.#connections.values()).pipe(
@@ -198,8 +202,6 @@ export class TuyaLocal {
                 const running_ips = new Set(list.map(i => i.ip))
                 const arp_ips = TuyaLocal.#listArpIps()
                 const free_ips = new Set(arp_ips.filter(a => !running_ips.has(a.ip)).map(a => a.ip))
-
-
 
                 return lastValueFrom(from(free_ips).pipe(
                     mergeMap(async ip => {
@@ -224,10 +226,12 @@ export class TuyaLocal {
                         const connection = this.#connections.get(device.id) || new this(device)
                         if (connection.$status.value == 'online') return
                         for (const ip of free_ips) {
-                            const success = await connection.connect({ ip, version: '3.5' })
-                            if (success && !this.#connections.has(device.id)) {
-                                this.#connections.set(device.id, connection)
-                                return connection
+                            for (const version of ['3.5', '3.4', '3.3']) {
+                                const success = await connection.connect({ ip, version })
+                                if (success && !this.#connections.has(device.id)) {
+                                    this.#connections.set(device.id, connection)
+                                    return connection
+                                }
                             }
                         }
                     }, 1)
@@ -264,7 +268,7 @@ export class TuyaLocal {
         this.#DEBUG = !!(
             TUYA2MQTT_DEBUG == 'all'
             || TUYA2MQTT_DEBUG.includes(this.config.id)
-        )
+        );
     }
 
     #seq = 100
@@ -304,56 +308,56 @@ export class TuyaLocal {
                     }
                 }),
                 mergeAll(),
-                // tap(data => {
-                //     const cmd = Object.entries(CommandType).find(([, v]) => v == data.commandByte)
-                //     this.#DEBUG && console.log({
-                //         receive: cmd,
-                //         ...data
-                //     })
-                // }),
                 mergeMap(async data => {
-                    const just_online = this.$status.getValue() != 'online'
-                    this.#seq = Math.max(this.#seq, data.sequenceN)
-                    const p = data.payload as { dps: RawDps, cid: string }
-                    if (p.dps && Object.keys(p.dps).length > 0) {
-                        const id = p.cid || this.config.id
-                        const $dps = this.registerDps(id)
-                        const is_button_dps = ["single_click", "double_click", "long_press"].some(
-                            key => p.dps[key] != undefined
-                        )
-                        const is_dps_changed = Object.keys(p.dps).some(key => p.dps[key] != $dps.value?.[key])
-                        if (just_online || is_button_dps || is_dps_changed) {
-                            $dps.next(p.dps)
+                    try {
+                        const just_online = this.$status.getValue() != 'online'
+                        this.#seq = Math.max(this.#seq, data.sequenceN)
+                        const p = data.payload as { dps: RawDps, cid: string }
+                        if (p.dps && Object.keys(p.dps).length > 0) {
+                            const id = p.cid || this.config.id
+                            const $dps = this.registerDps(id)
+                            const is_button_dps = ["single_click", "double_click", "long_press"].some(
+                                key => p.dps[key] != undefined
+                            )
+                            const is_dps_changed = Object.keys(p.dps).some(key => p.dps[key] != $dps.value?.[key])
+                            if (just_online || is_button_dps || is_dps_changed) {
+                                $dps.next(p.dps)
+                            }
                         }
+                        const pp = data.payload as SubDeviceReport
+                        if (pp.reqType == 'subdev_online_stat_report') {
+                            pp.data.online?.forEach(id => this.$subDevReports.next({ id, online: true }))
+                            pp.data.offline?.forEach(id => this.$subDevReports.next({ id, online: false }))
+                        }
+                        this.#$response.next(data)
+                        just_online && setTimeout(() => {
+                            this.$status.next('online')
+                            this.#DEBUG && console.log(`[${new Date().toLocaleString()}]     [${ip}] <${this.config.id}> [STREAMING]  ${this.config.name} `)
+                        }, 1000)
+                    } catch (e) {
+                        console.error(e)
                     }
-                    const pp = data.payload as SubDeviceReport
-                    if (pp.reqType == 'subdev_online_stat_report') {
-                        pp.data.online?.forEach(id => this.$subDevReports.next({ id, online: true }))
-                        pp.data.offline?.forEach(id => this.$subDevReports.next({ id, online: false }))
-                    }
-                    this.#$response.next(data)
-                    just_online && setTimeout(() => {
-                        this.$status.next('online')
-                        this.#DEBUG && console.log(`[${new Date().toLocaleString()}]     [${ip}] <${this.config.id}> [STREAMING]  ${this.config.name} `)
-                    }, 1000)
                 })
             ),
 
             // Map request 
             this.#$request.pipe(
                 filter(e => !!e.payload.commandByte),
-                mergeMap(async ({ payload, sequenceN }) => {
-                    Object.entries(CommandType).find(([k, v]) => v == payload.commandByte)
-                    // this.#DEBUG && console.log({ send: cmd, ...payload, seq: sequenceN })
-                    const buffer = parser.encode({
-                        ...payload,
-                        sequenceN
-                    })
-                    socket.write(buffer)
+                map(async ({ payload, sequenceN }) => {
+                    try {
+                        Object.entries(CommandType).find(([k, v]) => v == payload.commandByte)
+                        // this.#DEBUG && console.log({ send: cmd, ...payload, seq: sequenceN })
+                        const buffer = parser.encode({
+                            ...payload,
+                            sequenceN
+                        })
+                        socket.write(buffer)
+                    } catch (e) {
+                        console.error(e)
+                    }
                 })
             )
         ).pipe(
-            catchError(() => EMPTY),
             finalize(() => {
                 this.#devices.forEach(D => D.next(undefined))
                 socket.end()
@@ -449,6 +453,7 @@ export class TuyaLocal {
         return true
     }
 
+    @LimitConcurrency(1)
     async cmd(payload: { commandByte: number, data: any, encrypted?: boolean }, timeout: number = 3000, slient: boolean = false) {
         if (slient) {
             this.#$request.next({ payload, sequenceN: this.#seq })

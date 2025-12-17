@@ -8,3 +8,4 @@ export const USER_CODE = process.env.USER_CODE!
 export const CREDENTIAL_PATH = `${DIR}/credential.json`
 export const DEVICES_PATH = `${DIR}/devices.json`
 export const TUYA2MQTT_DEBUG = process.env.TUYA2MQTT_DEBUG  || 'all'
+export const VITURAL_SWITCHES = ((process.env.VITURAL_SWITCHES || '').split(',') || []).map(name => name.trim())

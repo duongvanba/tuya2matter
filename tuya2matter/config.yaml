@@ -1,5 +1,5 @@
 name: Tuya2Matter
-version: "1.0.65"
+version: "1.0.66"
 slug: tuya2matter
 description: |
   Bridge Tuya devices into Matter using Bun.js.
@@ -27,6 +27,8 @@ map:
 schema:
   user_code: str?
   tuya2mqtt_debug: str?
+  vitural_switches: str?
 options:
   user_code: ""
   tuya2mqtt_debug: ""
+  vitural_switches: ""

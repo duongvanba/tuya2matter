@@ -11,9 +11,6 @@ import { USER_CODE } from "../const.js";
 @Injectable()
 export class TuyaDeviceService extends Subject<TuyaDevice> {
 
-    #connections = new Map<string, TuyaLocal>
-    public homes$ = new ReplaySubject(1)
-
 
     async onModuleInit() {
         this.start()
@@ -21,23 +18,26 @@ export class TuyaDeviceService extends Subject<TuyaDevice> {
 
     start() {
         return lastValueFrom(this.#getCloudClient().pipe(
-            switchMap(homes => merge(
-                TuyaLocal.watch(homes.devices),
-                interval(5 * 60000).pipe(
-                    startWith(0),
-                    delay(20000),
+            filter((a, i) => i == 0),
+            switchMap(homes => {
+                const $ = TuyaLocal.watch(homes.devices).pipe(share())
+                const $$ = merge($, interval(10 * 60 * 1000)).pipe(
+                    debounceTime(10000),
                     exhaustMap(() => TuyaLocal.scan(homes.devices))
                 )
-            ).pipe(
-                mergeMap(connection => {
-                    const list = connection.config.is_gateway ? Object.values(homes.devices).filter(d => d.sub && d.gateway_id == connection.config.id) : [connection.config]
-                    return list.map(m => {
-                        const device = new TuyaDevice(m)
-                        device.linkLocal(connection)
-                        this.next(device)
+                return merge($, $$).pipe(
+                    mergeMap(connection => {
+                        const list = connection.config.is_gateway ? (
+                            Object.values(homes.devices).filter(d => d.sub && d.gateway_id == connection.config.id)
+                        ) : [connection.config]
+                        return list.map(m => {
+                            const device = new TuyaDevice(m)
+                            device.linkLocal(connection)
+                            this.next(device)
+                        })
                     })
-                })
-            ))
+                )
+            })
         ))
     }
 

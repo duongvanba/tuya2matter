@@ -4,7 +4,7 @@ import { Endpoint, MaybePromise } from "@matter/main";
 import { WindowCoveringDevice } from "@matter/main/devices";
 import { BridgedDeviceBasicInformationServer } from "@matter/main/behaviors";
 import { MovementDirection, MovementType, WindowCoveringServer } from "@matter/main/behaviors";
-import { map, mergeMap } from "rxjs";
+import { map, merge, mergeMap, of, Subject, switchMap, tap, timer } from "rxjs";
 
 
 const LiftingWindowCoveringServer = WindowCoveringServer.with("Lift", "PositionAwareLift", "AbsolutePosition");
@@ -18,10 +18,11 @@ export class Tuya2MatterCover {
 
     link() {
 
-      const name = this.tuya.name.slice(0,32)
+        const name = this.tuya.name.slice(0, 32)
 
         const tuya = this.tuya
 
+        const cmd$ = new Subject<'open' | 'close' | 'stop'>()
 
         const endpoint = new Endpoint(
             WindowCoveringDevice.with(class extends LiftingWindowCoveringServer {
@@ -35,11 +36,13 @@ export class Tuya2MatterCover {
                         targetPercent100ths != undefined && tuya.setDps({
                             percent_control: targetPercent100ths / 100
                         })
+                        cmd$.next(direction == MovementDirection.Open ? 'open' : 'close')
                     } else {
                         const control = targetPercent100ths == 10000 ? 'close' : (
                             targetPercent100ths == 0 ? 'open' : 'stop'
                         )
                         tuya.setDps({ control })
+                        cmd$.next(control as 'open' | 'close' | 'stop')
                     }
 
                 }
@@ -47,18 +50,21 @@ export class Tuya2MatterCover {
                     tuya.setDps({
                         control: 'stop'
                     })
+                    cmd$.next('stop')
                 }
 
                 override downOrClose(): MaybePromise {
                     tuya.setDps({
                         control: 'close'
                     })
+                    cmd$.next('close')
                 }
 
                 override upOrOpen(): MaybePromise {
                     tuya.setDps({
                         control: 'open'
                     })
+                    cmd$.next('open')
                 }
 
             }).with(BridgedDeviceBasicInformationServer), {
@@ -69,27 +75,45 @@ export class Tuya2MatterCover {
                 productLabel: name,
                 serialNumber: this.tuya.config.uuid,
                 reachable: false,
+            },
+            windowCovering: {
+                operationalStatus: { lift: 0 }
             }
         })
 
 
-        const observable = this.tuya.$dps.pipe(
-            map(d => d.state),
-            mergeMap(async dps => { 
-                if (dps.percent_control != undefined) {
-                    const targetPositionLiftPercent100ths = Number(dps.percent_control) * 100
-                    endpoint.set({ windowCovering: { targetPositionLiftPercent100ths } })
-                }
+        const observable = merge(
+            cmd$.pipe(
+                switchMap(cmd => {
+                    if (cmd == 'stop') return of(1)
+                    const lift = cmd == 'open' ? 1 : 2
+                    endpoint.set({ windowCovering: { operationalStatus: { lift } } })
+                    return timer(5000).pipe(
+                        tap(() => {
+                            endpoint.set({ windowCovering: { operationalStatus: { lift: 0 } } })
+                        })
+                    )
+                })
+            ),
+            this.tuya.$dps.pipe(
+                map(d => d.state),
+                mergeMap(async dps => {
+                    dps.control && cmd$.next(dps.control as 'open' | 'close' | 'stop')
+                    if (dps.percent_control != undefined) {
+                        const targetPositionLiftPercent100ths = Number(dps.percent_control) * 100 
+                        endpoint.set({ windowCovering: { targetPositionLiftPercent100ths } })
+                    }
 
-                if (dps.percent_state != undefined) {
-                    const currentPositionLiftPercent100ths = Number(dps.percent_state) * 100
-                    endpoint.set({ windowCovering: { currentPositionLiftPercent100ths } })
-                }
-            })
+                    if (dps.percent_state != undefined) {
+                        const currentPositionLiftPercent100ths = Number(dps.percent_state) * 100
+                        endpoint.set({ windowCovering: { currentPositionLiftPercent100ths } })
+                    }
+                })
+            )
         )
 
         return {
-            endpoint:endpoint as  Endpoint,
+            endpoint: endpoint as Endpoint,
             observable
         }
 
