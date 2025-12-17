@@ -1,4 +1,4 @@
-import { BehaviorSubject, EMPTY, Observable, ReplaySubject, Subject, catchError, delay, exhaustMap, filter, finalize, firstValueFrom, from, fromEvent, groupBy, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, tap, timer, toArray } from 'rxjs'
+import { BehaviorSubject, EMPTY, Observable, ReplaySubject, Subject, catchError, delay, exhaustMap, filter, finalize, firstValueFrom, from, fromEvent, groupBy, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, takeUntil, tap, timer, toArray } from 'rxjs'
 import dgram from 'dgram'
 import { createHash } from 'crypto'
 import { DeviceMetadata } from './DeviceMetadata.js'
@@ -124,7 +124,7 @@ export class TuyaLocal {
                 return []
             }),
             mergeAll(),
-            map(a => a.payload), 
+            map(a => a.payload),
             groupBy(payload => payload.gwId),
             mergeMap($ => $.pipe(
                 exhaustMap(async payload => {
@@ -150,54 +150,36 @@ export class TuyaLocal {
         }).filter(Boolean).map(a => a!)
     }
 
-    static async  #tcp({ ip, port = 6668 }: { ip: string, port?: number }) {
-        try {
-            const data$ = new Subject<Buffer>()
-            const socket = await Promise.race([
-                Bun.sleep(3000),
-                Bun.connect({
-                    hostname: ip,
-                    port,
-                    socket: {
-                        data(socket, data) { 
-                            data$.next(data)
-                        },
-                        open(socket) { },
-                        close(socket, error) {
-                            data$.complete()
-                        },
-                        drain(socket) { },
-                        error(socket, error) {
-                            data$.error(error)
-                        },
-
-                        connectError(socket, error) {
-                            data$.error(error)
-                        },
-                        end(socket) {
-                            data$.complete()
-                        },
-                        timeout(socket) {
-                            data$.error(new Error('Connection timed out'))
-                        },
-                    },
+    static #tcp({ ip, port = 6668 }: { ip: string, port?: number }) {
+        const socket = connect({ host: ip, port })
+        socket.on('error', () => { })
+        return firstValueFrom(merge(
+            fromEvent(socket, 'connect').pipe(
+                map(() => {
+                    const data$ = merge(
+                        fromEvent<Buffer>(socket, 'data'),
+                        fromEvent<Error>(socket, 'error').pipe(
+                            map(error => { throw error })
+                        )
+                    ).pipe(
+                        takeUntil(fromEvent(socket, 'close')),
+                        finalize(() => socket.end())
+                    )
+                    return Object.assign(socket, { data$ })
                 })
-            ])
-            if (!socket) return null
-            return Object.assign(socket, { data$ })
-        } catch (e) {
-            return null
-        }
+            ),
+            fromEvent(socket, 'error').pipe(map(() => null))
+        ))
     }
 
     static scan(devices: Record<string, DeviceMetadata>) {
         console.log('Scanning for Tuya devices in local network...')
         const home_ids = new Set([...this.#connections.values()].map(a => a.config.home_id))
-        const free_devices = Object.values(devices).filter(dev => { 
+        const free_devices = Object.values(devices).filter(dev => {
             if (dev.home_id && !home_ids.has(dev.home_id)) return false
             const connection = this.#connections.get(dev.id)
-            if (connection && connection.$status.value == 'online') return false
-            if(!dev.online) return false
+            if (connection) return false
+            if (!dev.online) return false
             if (dev.is_gateway) return true
             if (dev.sub) return false
             return true
@@ -368,12 +350,13 @@ export class TuyaLocal {
                         sequenceN
                     })
                     socket.write(buffer)
-                }, 1)
+                })
             )
         ).pipe(
             catchError(() => EMPTY),
             finalize(() => {
-                socket.close()
+                this.#devices.forEach(D => D.next(undefined))
+                socket.end()
                 this.$status.next('offline')
             })
         ).subscribe()

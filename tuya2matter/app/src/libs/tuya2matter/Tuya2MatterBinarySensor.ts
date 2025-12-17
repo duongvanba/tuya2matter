@@ -53,7 +53,7 @@ export class Tuya2MatterBinarySensor {
 
 
         const observable = this.tuya.$dps.pipe(
-            map(d => d.last),
+            map(d => d.state),
             mergeMap(async dps => {
                 const onoff = dps.doorcontact_state
                 const percent = dps.battery_percentage

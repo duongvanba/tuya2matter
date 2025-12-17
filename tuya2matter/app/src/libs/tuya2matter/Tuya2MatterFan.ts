@@ -62,7 +62,7 @@ export class Tuya2MatterFan {
         )
 
         const observable = this.tuya.$dps.pipe(
-            map(d => d.last),
+            map(d => d.state),
             mergeMap(async dps => {
                 const { fan_speed, light } = dps
 

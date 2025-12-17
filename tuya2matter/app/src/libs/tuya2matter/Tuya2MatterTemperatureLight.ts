@@ -60,15 +60,15 @@ export class Tuya2MatterTemperatureLight {
         )
 
         const observable = this.tuya.$dps.pipe(
-            map(d => d.last),
+            map(d => d.state),
             mergeMap(async dps => {
                 const temp_value = dps.temp_value
                 const bright_value = dps.bright_value
-                const onOff = dps.switch_led
+                const onOff = !!dps.switch_led
                 const value = {
                     ...temp_value != undefined ? { colorControl: { colorTemperatureMireds: Math.round(370 - 217 * temp_value / 1000) } } : {},
                     ...bright_value != undefined ? { levelControl: { currentLevel: Math.round(250 * bright_value / 1000 + 4) } } : {},
-                    ...onOff != undefined ? { onOff: { onOff } } : {}
+                    onOff: { onOff }
                 }
                 endpoint.set(value)
 

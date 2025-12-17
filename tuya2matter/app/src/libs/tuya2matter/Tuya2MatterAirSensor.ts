@@ -90,7 +90,7 @@ export class Tuya2MatterAirSensor {
 
 
         const observable = this.tuya.$dps.pipe(
-            map(d => d.last),
+            map(d => d.state),
             mergeMap(async dps => { 
                 endpoint.set({
                     airQuality: {

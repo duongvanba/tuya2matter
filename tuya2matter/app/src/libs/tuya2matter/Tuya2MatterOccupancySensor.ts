@@ -44,7 +44,7 @@ export class Tuya2MatterOccupancySensor {
             })
 
         const observable = this.tuya.$dps.pipe(
-            map(d => d.last),
+            map(d => d.state),
             mergeMap(async dps => {
                 dps.presence_state != undefined && endpoint.set({
                     occupancySensing: {
