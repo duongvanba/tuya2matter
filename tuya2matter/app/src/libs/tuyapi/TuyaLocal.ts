@@ -1,4 +1,4 @@
-import { BehaviorSubject, EMPTY, Observable, ReplaySubject, Subject, catchError, delay, exhaustMap, filter, finalize, firstValueFrom, from, fromEvent, groupBy, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, range, takeUntil, tap, timer, toArray } from 'rxjs'
+import { BehaviorSubject, Observable, ReplaySubject, Subject, catchError, exhaustMap, filter, finalize, firstValueFrom, from, fromEvent, groupBy, interval, lastValueFrom, map, merge, mergeAll, mergeMap, of, takeUntil, timer, toArray } from 'rxjs'
 import dgram from 'dgram'
 import { createHash } from 'crypto'
 import { DeviceMetadata } from './DeviceMetadata.js'
@@ -7,7 +7,6 @@ import { CommandType, MessageParser } from 'tuyapi/lib/message-parser.js'
 import { TUYA2MQTT_DEBUG } from '../../const.js'
 import { execSync } from 'child_process'
 import { LimitConcurrency } from '../../helpers/LimitConcurrency.js'
-import { TuyaDeviceHomeMap } from './TuyaCloud.js'
 
 
 export type ApiCredential = {
@@ -35,6 +34,7 @@ export type RawDps = Partial<{
 }>
 
 export type ReadableDps = Partial<{
+    colour_data: string
     air_quality_index: number
     co2_value: number,
     ch2o_value: number
@@ -131,6 +131,12 @@ export class TuyaLocal {
             map(a => a.payload),
             groupBy(payload => payload.gwId),
             mergeMap($ => $.pipe(
+                filter(({ gwId }) => {
+                    if (process.argv[2] == 'test') {
+                        return gwId == 'eba446c6d4b5606345gh5e'
+                    }
+                    return true
+                }),
                 exhaustMap(async payload => {
                     const metadata = devices[payload.gwId]
                     if (!metadata) return

@@ -13,17 +13,18 @@ export class DeviceController {
 
     @Get()
     async devices() {
-        if (this.s.homes$) {
-            const devies = await firstValueFrom(this.s.homes$)
-            return {
-                data: { devies }
-            }
-        }
-        return {
-            message: 'initing',
-            data: {
-                devices: null
-            }
-        }
+        return {}
+        // if (this.s.homes$) {
+        //     const devies = await firstValueFrom(this.s.homes$)
+        //     return {
+        //         data: { devies }
+        //     }
+        // }
+        // return {
+        //     message: 'initing',
+        //     data: {
+        //         devices: null
+        //     }
+        // }
     }
 }

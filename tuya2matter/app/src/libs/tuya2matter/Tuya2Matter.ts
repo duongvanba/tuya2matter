@@ -42,7 +42,8 @@ export class Tuya2Matter {
     async init() {
         const device = this.#getMapper()
         if (!device) return
-        const link = device.link()
+        const link = device.link() 
+        if (!link) return
 
         await this.aggregator.add(link.endpoint)
 
@@ -65,7 +66,7 @@ export class Tuya2Matter {
         ).subscribe()
     }
 
-   
+
 
     stop() {
         this.#stop.next(true)
