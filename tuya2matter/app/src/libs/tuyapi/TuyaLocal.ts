@@ -371,7 +371,7 @@ export class TuyaLocal {
         const decrypted = ['3.4', '3.5'].includes(version) ? await this.#negotiate(version, parser) : true
 
         if (!decrypted) {
-            console.error(`[${new Date().toLocaleString()}]     [${ip}] <${this.config.id}> Can not setup 3.4 protocol for ${this.config.name}`)
+            console.error(`[${new Date().toLocaleString()}]     [${ip}] <${this.config.id}> Can not setup ${version} protocol for ${this.config.name}`)
             connection.unsubscribe()
             return false
         }

@@ -17,7 +17,7 @@ export class Tuya2MatterFan {
 
     link() {
 
-      const name = this.tuya.name.slice(0,32)
+        const name = this.tuya.name.slice(0, 32)
         const tuya = this.tuya
 
         const endpoint = new Endpoint(
@@ -74,7 +74,7 @@ export class Tuya2MatterFan {
                     }
                 })
 
-                if (dps.switch != undefined && fan_speed != undefined) {
+                if (dps.switch && fan_speed != undefined) {
                     const speedCurrent = Number(fan_speed)
                     const fanMode = Math.round(speedCurrent / 5 * 3)
                     const percentCurrent = Math.round(speedCurrent / 5 * 100)

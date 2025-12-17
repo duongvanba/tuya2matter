@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { MatterService } from "./Matter.js";
 import { TuyaDeviceService } from "./TuyaDeviceService.js";
-import { filter, from, merge, mergeAll, mergeMap, of, switchMap, tap } from "rxjs";
+import { filter, from, map, merge, mergeAll, mergeMap, of, switchMap, tap } from "rxjs";
 import { Tuya2Matter } from "../libs/tuya2matter/Tuya2Matter.js";
 import { VITURAL_SWITCHES } from "../const.js";
 import { VituralSwitch } from "../libs/vitural/VituralSwitch.js";
@@ -17,8 +17,10 @@ export class SyncService {
     ) {
         matter.aggregator$.pipe(
             switchMap(aggregator => merge(
-                of(VITURAL_SWITCHES).pipe(
-                    tap(() => console.log(`[${new Date().toLocaleTimeString()}]     [VITURAL SWITCHES INITIALIZING] - ${VITURAL_SWITCHES.length} switches`)),
+                of(0).pipe(
+                    map(() => VITURAL_SWITCHES.split(',').map(a => a.trim()).filter(a => a.length > 0)),
+                    filter(Boolean),
+                    tap(list => console.log(`[${new Date().toLocaleTimeString()}]     [VITURAL SWITCHES INITIALIZING] - ${list.length} switches`)),
                     mergeAll(),
                     mergeMap(name => {
                         const id = Buffer.from(name).toString('hex').slice(0, 32)
