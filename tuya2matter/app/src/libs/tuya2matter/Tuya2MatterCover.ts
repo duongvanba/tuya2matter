@@ -18,7 +18,7 @@ export class Tuya2MatterCover {
 
     link() {
 
-        const name = this.tuya.name.slice(0, 32)
+      const name = this.tuya.name.slice(0,32)
 
         const tuya = this.tuya
 
@@ -75,20 +75,21 @@ export class Tuya2MatterCover {
 
         const observable = this.tuya.$dps.pipe(
             map(d => d.state),
-            mergeMap(async dps => {
-                endpoint.set({
-                    windowCovering: {
-                        // currentPositionLiftPercent100ths: 100,
-                        // targetPositionLiftPercent100ths: 100,
-                        ...dps.percent_control != undefined ? {} : { targetPositionLiftPercent100ths: Number(dps.percent_control) * 100 },
-                        ...dps.percent_state != undefined ? {} : { currentPositionLiftPercent100ths: Number(dps.percent_state) * 100 }
-                    }
-                })
+            mergeMap(async dps => { 
+                if (dps.percent_control != undefined) {
+                    const targetPositionLiftPercent100ths = Number(dps.percent_control) * 100
+                    endpoint.set({ windowCovering: { targetPositionLiftPercent100ths } })
+                }
+
+                if (dps.percent_state != undefined) {
+                    const currentPositionLiftPercent100ths = Number(dps.percent_state) * 100
+                    endpoint.set({ windowCovering: { currentPositionLiftPercent100ths } })
+                }
             })
         )
 
         return {
-            endpoint: endpoint as Endpoint,
+            endpoint:endpoint as  Endpoint,
             observable
         }
 
