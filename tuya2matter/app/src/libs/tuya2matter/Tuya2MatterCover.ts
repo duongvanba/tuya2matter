@@ -78,8 +78,8 @@ export class Tuya2MatterCover {
             mergeMap(async dps => {
                 endpoint.set({
                     windowCovering: {
-                        currentPositionLiftPercent100ths: 100,
-                        targetPositionLiftPercent100ths: 100,
+                        // currentPositionLiftPercent100ths: 100,
+                        // targetPositionLiftPercent100ths: 100,
                         ...dps.percent_control != undefined ? {} : { targetPositionLiftPercent100ths: Number(dps.percent_control) * 100 },
                         ...dps.percent_state != undefined ? {} : { currentPositionLiftPercent100ths: Number(dps.percent_state) * 100 }
                     }
